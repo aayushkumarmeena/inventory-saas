@@ -1,0 +1,11 @@
+.gst-badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.gst-badge-b2b { background: #e0e7ff; color: #3730a3; }
+.gst-badge-b2c { background: #d1fae5; color: #065f46; }
+.gst-badge-export { background: #fef3c7; color: #92400e; }
+.gst-badge-cancelled { background: #fee2e2; color: #991b1b; }

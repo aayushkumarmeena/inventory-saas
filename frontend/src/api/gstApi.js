@@ -1,0 +1,26 @@
+import apiClient from'./axiosConfig';
+export const gstApi={
+  getConfig:()=>apiClient.get('/gst/config'),
+  saveConfig:(d)=>apiClient.put('/gst/config',d),
+  listHsnSac:(p)=>apiClient.get('/gst/hsn-sac',{params:p}),
+  allHsnSac:()=>apiClient.get('/gst/hsn-sac/all'),
+  createHsnSac:(d)=>apiClient.post('/gst/hsn-sac',d),
+  updateHsnSac:(id,d)=>apiClient.put(`/gst/hsn-sac/${id}`,d),
+  deleteHsnSac:(id)=>apiClient.delete(`/gst/hsn-sac/${id}`),
+  listInvoices:(p)=>apiClient.get('/gst/invoices',{params:p}),
+  getInvoicePdf:(id)=>apiClient.get(`/gst/invoices/${id}/pdf`,{responseType:'blob'}),
+  getInvoice:(id)=>apiClient.get(`/gst/invoices/${id}`),
+  getInvoiceBySale:(sid)=>apiClient.get(`/gst/invoices/by-sale/${sid}`),
+  generateInvoice:(d)=>apiClient.post('/gst/invoices',d),
+  cancelInvoice:(id,reason)=>apiClient.post(`/gst/invoices/${id}/cancel`,null,{params:{reason}}),
+  getSummary:(from,to)=>apiClient.get('/gst/summary',{params:{from,to}}),
+  getGstr1:(month,year)=>apiClient.get('/gst/returns/gstr1',{params:{month,year}}),
+  listPeriods:()=>apiClient.get('/gst/returns/periods'),
+  upsertPeriod:(type,month,year)=>apiClient.post('/gst/returns/periods',null,{params:{type,month,year}}),
+  markFiled:(id)=>apiClient.post(`/gst/returns/periods/${id}/file`),
+  calculateTax:(amount,rate,taxInclusive,supplyType)=>apiClient.get('/gst/calculate-tax',{params:{amount,rate,taxInclusive,supplyType}}),
+  exportGstr1:(month,year)=>apiClient.get('/gst/reports/gstr1/export',{params:{month,year},responseType:'blob'}),
+  exportGstr3b:(month,year)=>apiClient.get('/gst/reports/gstr3b/export',{params:{month,year},responseType:'blob'}),
+  getPnl:(from,to)=>apiClient.get('/gst/reports/pnl',{params:{from,to}}),
+};
+export default gstApi;

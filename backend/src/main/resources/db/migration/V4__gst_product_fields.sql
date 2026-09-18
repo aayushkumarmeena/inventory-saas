@@ -1,0 +1,10 @@
+ALTER TABLE products
+    ADD COLUMN IF NOT EXISTS hsn_sac_code  VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS hsn_sac_type  VARCHAR(3)   DEFAULT 'HSN',
+    ADD COLUMN IF NOT EXISTS cgst_rate     DECIMAL(5,2) DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS sgst_rate     DECIMAL(5,2) DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS igst_rate     DECIMAL(5,2) DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS cess_rate     DECIMAL(5,2) DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS tax_inclusive BOOLEAN      DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_products_hsn ON products(hsn_sac_code);
