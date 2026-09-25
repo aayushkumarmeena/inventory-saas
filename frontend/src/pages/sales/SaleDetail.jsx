@@ -40,7 +40,7 @@ export default function SaleDetail({ saleId, onClose, onPrintReceipt, onRecordPa
               className="btn btn-secondary btn-sm"
               onClick={() => onPrintReceipt(sale)}
             >
-              <i className="ti ti-printer" /> Print Receipt
+              <i className="ti ti-printer" /> Print Bill / Invoice
             </button>
             <div style={{ display: 'flex', gap: 8 }}>
               {Number(sale.balanceDue) > 0 && sale.paymentStatus !== 'CANCELLED' && (

@@ -196,13 +196,13 @@ function NewSaleModal({ onClose, onSaved }) {
     setSaving(true);
     setError('');
     try {
-      await salesApi.create({
+      const resp = await salesApi.create({
         customerName: customerName || null,
         paymentMethod: paymentMethod,
         items: validLines.map((l) => ({ productId: Number(l.productId), quantity: Number(l.quantity) })),
       });
       toast.success('Sale recorded successfully');
-      onSaved();
+      onSaved(resp?.data?.data);
     } catch (err) {
       setError(err.response?.data?.message || (err.request ? 'Could not reach the server.' : 'Something went wrong'));
     } finally {
@@ -340,10 +340,13 @@ export default function Sales() {
     load();
   }, [load]);
 
-  const onSaved = () => {
+  const onSaved = (createdSale) => {
     setShowNew(false);
     setPage(0);
     load();
+    if (createdSale) {
+      setReceiptSale(createdSale);
+    }
   };
 
   const handleConfirmCancel = async () => {
