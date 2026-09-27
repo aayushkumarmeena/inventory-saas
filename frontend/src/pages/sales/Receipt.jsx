@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { QRCodeCanvas } from 'qrcode.react';
 import Modal from '../../components/Modal';
 import { fmtCurrency, fmtDate, amountInWords } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
@@ -50,7 +51,10 @@ export default function Receipt({ sale, onClose }) {
   const { user } = useAuth();
   const [template, setTemplate] = useState('a4'); // 'a4' | 'thermal'
   const [showCustomize, setShowCustomize] = useState(false);
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
+  const [whatsAppPhone, setWhatsAppPhone] = useState('');
   const [customerData, setCustomerData] = useState(null);
+  const qrCanvasRef = useRef(null);
 
   // Store information state with local fallback & persistent localStorage cache
   const [store, setStore] = useState(() => {
@@ -70,6 +74,7 @@ export default function Receipt({ sale, onClose }) {
       email: user?.email || 'contact@store.com',
       gstin: '27AAAAA0000A1Z5',
       pan: 'AAAAA0000A',
+      upiId: 'inventorypro@upi',
       terms: '1. Goods once sold will not be exchanged or returned without original bill.\n2. Please verify items and cash before leaving counter.\n3. Subject to local jurisdiction only.',
     };
   });
@@ -105,7 +110,13 @@ export default function Receipt({ sale, onClose }) {
 
     if (sale?.customerId) {
       customerApi.get(sale.customerId)
-        .then((r) => setCustomerData(r.data?.data))
+        .then((r) => {
+          const cust = r.data?.data;
+          setCustomerData(cust);
+          if (cust?.phone) {
+            setWhatsAppPhone(cust.phone);
+          }
+        })
         .catch(() => {});
     }
   }, [sale?.customerId]);
@@ -128,10 +139,22 @@ export default function Receipt({ sale, onClose }) {
   const grandTotal = Number(sale.totalAmount || 0);
   const amountPaid = Number(sale.amountPaid || grandTotal);
   const balanceDue = Number(sale.balanceDue || 0);
+  const upiPayAmount = balanceDue > 0 ? balanceDue : grandTotal;
+
+  // Standard NPCI UPI URI
+  const upiId = store.upiId || 'store@upi';
+  const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(store.name || 'Store')}&am=${upiPayAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent('Bill ' + sale.saleNumber)}`;
 
   // Generate pure HTML string for printing
   const generatePrintHtml = (format) => {
     const isThermal = format === 'thermal';
+    let qrDataUrl = '';
+    try {
+      const canvas = document.getElementById('inventory-upi-qr-canvas');
+      if (canvas) {
+        qrDataUrl = canvas.toDataURL('image/png');
+      }
+    } catch (e) {}
 
     if (isThermal) {
       return `<!DOCTYPE html>
@@ -221,6 +244,16 @@ export default function Receipt({ sale, onClose }) {
       <span>PAID IN FULL</span>
     </div>
   `}
+
+  ${qrDataUrl ? `
+    <div class="divider"></div>
+    <div class="center" style="margin: 6px 0;">
+      <div style="font-size: 9.5px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">SCAN & PAY VIA UPI (GPAY / PHONEPE)</div>
+      <img src="${qrDataUrl}" width="105" height="105" alt="UPI QR" style="display: block; margin: 0 auto;" />
+      <div style="font-size: 8.5px; margin-top: 3px; font-family: monospace;">UPI ID: ${upiId}</div>
+      <div style="font-size: 9px; font-weight: bold; margin-top: 1px;">Amount: ${fmtCurrency(upiPayAmount)}</div>
+    </div>
+  ` : ''}
 
   <div class="divider"></div>
 
@@ -444,6 +477,16 @@ export default function Receipt({ sale, onClose }) {
       font-weight: 700;
       font-size: 11px;
     }
+    .upi-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 9px 12px;
+      background: #faf5ff;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -501,7 +544,7 @@ export default function Receipt({ sale, onClose }) {
           </div>
           <div class="info-value-row">
             <span style="color: #6b7280;">Place of Supply:</span>
-            <span>${store.state || 'Local'}</span>
+            <span>${store.state || 'Local State'}</span>
           </div>
         </td>
       </tr>
@@ -543,6 +586,18 @@ export default function Receipt({ sale, onClose }) {
           <div style="font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase;">Amount in Words:</div>
           <div style="font-weight: 600; color: #111827; margin-top: 3px;">${amountInWords(grandTotal)}</div>
         </div>
+
+        ${qrDataUrl ? `
+          <div class="upi-card">
+            <img src="${qrDataUrl}" width="82" height="82" alt="UPI QR" style="border-radius: 6px; border: 1px solid #d8b4fe;" />
+            <div>
+              <div style="font-size: 10.5px; font-weight: 800; color: #6b21a8; text-transform: uppercase; letter-spacing: 0.04em;">Scan to Pay via UPI</div>
+              <div style="font-size: 10px; color: #4b5563; margin-top: 2px;">Google Pay, PhonePe, Paytm, BHIM</div>
+              <div style="font-size: 10.5px; font-family: monospace; font-weight: 700; color: #1e1b4b; margin-top: 3px;">${upiId}</div>
+              <div style="font-size: 10.5px; color: #7e22ce; font-weight: 700; margin-top: 2px;">Amount: ${fmtCurrency(upiPayAmount)}</div>
+            </div>
+          </div>
+        ` : ''}
 
         ${store.terms ? `
           <div class="terms-block">
@@ -614,8 +669,56 @@ export default function Receipt({ sale, onClose }) {
     }
   };
 
+  // WhatsApp Bill Sharing Handler
+  const handleSendWhatsApp = (e) => {
+    e?.preventDefault();
+    const cleanPhone = (whatsAppPhone || '').replace(/[^0-9]/g, '');
+    const phoneParam = cleanPhone.length === 10 ? '91' + cleanPhone : cleanPhone;
+
+    const itemsSummary = (sale.items || [])
+      .map((it, idx) => `${idx + 1}. *${it.productName}*\n   ${it.quantity} x ₹${Number(it.unitPrice).toFixed(2)} = *₹${(Number(it.quantity) * Number(it.unitPrice)).toFixed(2)}*`)
+      .join('\n');
+
+    const message = `🧾 *TAX INVOICE / BILL*
+━━━━━━━━━━━━━━━━━━━━
+🏪 *${store.name}*
+${fullAddress ? `📍 ${fullAddress}\n` : ''}${store.phone ? `📞 Ph: ${store.phone}\n` : ''}${store.gstin ? `🏛️ GSTIN: ${store.gstin}\n` : ''}━━━━━━━━━━━━━━━━━━━━
+📄 *Invoice #:* ${sale.saleNumber}
+📅 *Date:* ${fmtDate(sale.saleDate)}
+👤 *Customer:* ${sale.customerName || 'Customer'}
+💳 *Payment Mode:* ${paymentMethod}
+━━━━━━━━━━━━━━━━━━━━
+🛒 *ITEMS:*
+${itemsSummary}
+━━━━━━━━━━━━━━━━━━━━
+💰 *Grand Total:* ₹${grandTotal.toFixed(2)}
+💵 *Amount Paid:* ₹${amountPaid.toFixed(2)}
+${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *Pay via UPI:* ${upiId}\n🔗 *UPI Payment Link:* ${upiString}` : '✅ *Status:* PAID IN FULL'}
+
+✨ *Thank you for shopping with us!*`;
+
+    const url = phoneParam
+      ? `https://wa.me/${phoneParam}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+    window.open(url, '_blank');
+    setShowWhatsApp(false);
+  };
+
   return (
-    <Modal title={`Invoice & Bill · ${sale.saleNumber}`} onClose={onClose} maxWidth={820}>
+    <Modal title={`Invoice & Bill · ${sale.saleNumber}`} onClose={onClose} maxWidth={840}>
+      {/* Hidden QR Canvas for Print rendering */}
+      <div style={{ display: 'none' }}>
+        <QRCodeCanvas
+          id="inventory-upi-qr-canvas"
+          ref={qrCanvasRef}
+          value={upiString}
+          size={160}
+          level="M"
+          includeMargin={false}
+        />
+      </div>
+
       {/* Action Bar & Controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
         {/* Template Toggle */}
@@ -639,14 +742,23 @@ export default function Receipt({ sale, onClose }) {
         </div>
 
         {/* Quick Tools */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: '#16a34a', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+            onClick={() => setShowWhatsApp(true)}
+            title="Share bill details on WhatsApp"
+          >
+            <i className="ti ti-brand-whatsapp" style={{ fontSize: 15 }} /> Share WhatsApp
+          </button>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setShowCustomize(!showCustomize)}
-            title="Edit Store Name, Address, Phone, and GSTIN"
+            title="Edit Store Name, Address, Phone, GSTIN, and UPI ID"
           >
-            <i className="ti ti-edit" /> {showCustomize ? 'Hide Store Edit' : 'Edit Store Info'}
+            <i className="ti ti-edit" /> {showCustomize ? 'Hide Edit' : 'Edit Store & UPI'}
           </button>
           <button
             type="button"
@@ -666,11 +778,51 @@ export default function Receipt({ sale, onClose }) {
         </div>
       </div>
 
+      {/* WhatsApp Share Popover Modal */}
+      {showWhatsApp && (
+        <div style={{ background: 'var(--glass-bg)', padding: 16, borderRadius: 10, border: '1px solid #16a34a', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <i className="ti ti-brand-whatsapp" style={{ fontSize: 18 }} />
+              Share Digital Bill on WhatsApp
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowWhatsApp(false)}>
+              <i className="ti ti-x" />
+            </button>
+          </div>
+          <form onSubmit={handleSendWhatsApp}>
+            <div style={{ marginBottom: 12 }}>
+              <label className="field-label" style={{ fontSize: 11 }}>Customer WhatsApp Number (10 digits)</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <span style={{ padding: '7px 10px', background: 'var(--border)', borderRadius: 6, fontSize: 12, fontWeight: 600 }}>+91</span>
+                <input
+                  type="tel"
+                  className="field-input"
+                  placeholder="e.g. 9876543210 (or leave empty to pick contact)"
+                  value={whatsAppPhone}
+                  onChange={(e) => setWhatsAppPhone(e.target.value)}
+                  style={{ fontSize: 13, flex: 1 }}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                Instant bill breakdown, items list, total, and UPI payment link will be sent.
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowWhatsApp(false)}>Cancel</button>
+              <button type="submit" className="btn btn-sm" style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '6px 16px' }}>
+                <i className="ti ti-send" /> Open WhatsApp
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Collapsible Store Details Editor */}
       {showCustomize && (
         <form onSubmit={handleSaveStore} style={{ background: 'var(--glass-bg)', padding: 14, borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-            Customize Store Details (Prints on Header & Bills)
+            Customize Store Details & UPI ID (Prints on Header & Bills)
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
@@ -690,6 +842,16 @@ export default function Receipt({ sale, onClose }) {
                 style={{ fontSize: 12.5, padding: '6px 10px' }}
                 value={editForm.tagline}
                 onChange={(e) => setEditForm({ ...editForm, tagline: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="field-label" style={{ fontSize: 11 }}>Store UPI ID (For Bill QR Code)</label>
+              <input
+                className="field-input"
+                style={{ fontSize: 12.5, padding: '6px 10px', borderColor: '#8b5cf6' }}
+                placeholder="e.g. merchant@oksbi or yourname@upi"
+                value={editForm.upiId || ''}
+                onChange={(e) => setEditForm({ ...editForm, upiId: e.target.value })}
               />
             </div>
             <div>
@@ -805,7 +967,7 @@ export default function Receipt({ sale, onClose }) {
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 4 }}>Payment Details:</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                   <span style={{ color: '#6b7280' }}>Payment Mode:</span>
-                  <strong>{paymentMethod}</strong>
+                  <strong>${paymentMethod}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                   <span style={{ color: '#6b7280' }}>Payment Status:</span>
@@ -815,7 +977,7 @@ export default function Receipt({ sale, onClose }) {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#6b7280' }}>Place of Supply:</span>
-                  <span>{store.state || 'Local'}</span>
+                  <span>{store.state || 'Local State'}</span>
                 </div>
               </div>
             </div>
@@ -849,12 +1011,33 @@ export default function Receipt({ sale, onClose }) {
               </tbody>
             </table>
 
-            {/* Calculations & Totals */}
+            {/* Calculations, Totals & UPI Section */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 12px', marginBottom: 10 }}>
                   <div style={{ fontSize: 9.5, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Amount in Words:</div>
                   <div style={{ fontWeight: 600, color: '#111827', marginTop: 2, fontSize: 11.5 }}>{amountInWords(grandTotal)}</div>
+                </div>
+
+                {/* Scan & Pay UPI Interactive Card */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', background: '#faf5ff', marginBottom: 10 }}>
+                  <div style={{ background: '#fff', padding: 4, borderRadius: 6, border: '1px solid #d8b4fe' }}>
+                    <QRCodeCanvas value={upiString} size={78} level="M" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10.5, fontWeight: 800, color: '#6b21a8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Scan & Pay via UPI
+                    </div>
+                    <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>
+                      GPay, PhonePe, Paytm, BHIM, CRED
+                    </div>
+                    <div style={{ fontSize: 10.5, fontFamily: 'monospace', fontWeight: 700, color: '#1e1b4b', marginTop: 3 }}>
+                      {upiId}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: '#7e22ce', fontWeight: 700, marginTop: 2 }}>
+                      Amount: {fmtCurrency(upiPayAmount)}
+                    </div>
+                  </div>
                 </div>
 
                 {store.terms && (
@@ -996,6 +1179,20 @@ export default function Receipt({ sale, onClose }) {
               </div>
             )}
 
+            {/* UPI QR in Thermal Slip */}
+            <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+            <div style={{ textAlign: 'center', margin: '6px 0' }}>
+              <div style={{ fontSize: 9.5, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 }}>
+                SCAN & PAY VIA UPI
+              </div>
+              <div style={{ display: 'inline-block', background: '#fff', padding: 4, border: '1px solid #ccc' }}>
+                <QRCodeCanvas value={upiString} size={90} level="M" />
+              </div>
+              <div style={{ fontSize: 8.5, fontFamily: 'monospace', marginTop: 3 }}>
+                UPI: {upiId}
+              </div>
+            </div>
+
             <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
 
             <div style={{ textAlign: 'center', fontSize: 9.5, marginTop: 6 }}>
@@ -1012,6 +1209,14 @@ export default function Receipt({ sale, onClose }) {
           Close
         </button>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: '#16a34a', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+            onClick={() => setShowWhatsApp(true)}
+          >
+            <i className="ti ti-brand-whatsapp" style={{ fontSize: 15 }} /> WhatsApp
+          </button>
           <button type="button" className="btn btn-secondary" onClick={handleOpenNewTab}>
             <i className="ti ti-external-link" /> Full Screen / Save PDF
           </button>
