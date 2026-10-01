@@ -26,6 +26,19 @@ public class AnalyticsController {
                 .success(true).message("Analytics overview").data(analyticsService.getOverview(tid(), clamped)).build());
     }
 
+    @GetMapping("/profit")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> profit(@RequestParam(defaultValue = "30") int days) {
+        int clamped = Math.max(1, Math.min(days, 365));
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true).message("Profit analytics").data(analyticsService.getProfitSummary(tid(), clamped)).build());
+    }
+
+    @GetMapping("/inventory-intel")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> inventoryIntel() {
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(true).message("Inventory intelligence").data(analyticsService.getInventoryIntel(tid())).build());
+    }
+
     private Long tid() {
         return TenantContext.getCurrentTenant();
     }
