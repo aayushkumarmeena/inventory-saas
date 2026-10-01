@@ -56,6 +56,23 @@ export default function Receipt({ sale, onClose }) {
   const [customerData, setCustomerData] = useState(null);
   const qrCanvasRef = useRef(null);
 
+  // Branding config (logo, accent color, custom footer/terms)
+  const [branding] = useState(() => {
+    const DEFAULT_BRANDING = {
+      logoDataUrl: '', accentColor: '#2563eb', headerLayout: 'logo-left',
+      showLogoOnThermal: false,
+      footerMessage: 'Thank you for shopping with us! Visit again.',
+      termsAndConditions: '1. Goods once sold will not be exchanged or returned without original bill.\n2. Please verify items and cash before leaving counter.\n3. Subject to local jurisdiction only.',
+      showTermsOnA4: true, showQrOnA4: true, showQrOnThermal: true,
+      invoiceTitle: 'TAX INVOICE / BILL', footerNote: '',
+    };
+    try {
+      const s = localStorage.getItem('inventorypro_branding');
+      if (s) return { ...DEFAULT_BRANDING, ...JSON.parse(s) };
+    } catch (e) {}
+    return DEFAULT_BRANDING;
+  });
+
   // Store information state with local fallback & persistent localStorage cache
   const [store, setStore] = useState(() => {
     const saved = localStorage.getItem('inventorypro_store_profile');
@@ -189,7 +206,8 @@ export default function Receipt({ sale, onClose }) {
 </head>
 <body>
   <div class="center">
-    <div class="store-name">${store.name}</div>
+    ${branding.logoDataUrl && branding.showLogoOnThermal ? `<img src="${branding.logoDataUrl}" style="max-height:50px; max-width:150px; object-fit:contain; display:block; margin:0 auto 4px;" alt="Logo" />` : ''}
+    <div class="store-name" style="color:${branding.accentColor || '#000'};">${store.name}</div>
     ${store.tagline ? `<div style="font-size: 10px; margin-bottom: 2px;">${store.tagline}</div>` : ''}
     <div style="font-size: 10px;">${fullAddress}</div>
     ${store.phone ? `<div style="font-size: 10px;">Phone: ${store.phone}</div>` : ''}
@@ -245,10 +263,10 @@ export default function Receipt({ sale, onClose }) {
     </div>
   `}
 
-  ${qrDataUrl ? `
+  ${qrDataUrl && branding.showQrOnThermal ? `
     <div class="divider"></div>
     <div class="center" style="margin: 6px 0;">
-      <div style="font-size: 9.5px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">SCAN & PAY VIA UPI (GPAY / PHONEPE)</div>
+      <div style="font-size: 9.5px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">SCAN &amp; PAY VIA UPI (GPAY / PHONEPE)</div>
       <img src="${qrDataUrl}" width="105" height="105" alt="UPI QR" style="display: block; margin: 0 auto;" />
       <div style="font-size: 8.5px; margin-top: 3px; font-family: monospace;">UPI ID: ${upiId}</div>
       <div style="font-size: 9px; font-weight: bold; margin-top: 1px;">Amount: ${fmtCurrency(upiPayAmount)}</div>
@@ -258,7 +276,8 @@ export default function Receipt({ sale, onClose }) {
   <div class="divider"></div>
 
   <div class="center" style="font-size: 10px; margin-top: 8px;">
-    <div>*** Thank You for Shopping With Us! ***</div>
+    <div style="font-weight:bold;">${branding.footerMessage || '*** Thank You for Shopping With Us! ***'}</div>
+    ${branding.footerNote ? `<div style="font-size: 8.5px; margin-top: 3px;">${branding.footerNote}</div>` : ''}
     <div style="font-size: 9px; margin-top: 3px;">Computer Generated Bill</div>
   </div>
 </body>
@@ -291,14 +310,14 @@ export default function Receipt({ sale, onClose }) {
     }
     .header-table {
       width: 100%;
-      border-bottom: 2px solid #2563eb;
+      border-bottom: 2px solid ${branding.accentColor || '#2563eb'};
       padding-bottom: 16px;
       margin-bottom: 18px;
     }
     .store-title {
       font-size: 22px;
       font-weight: 800;
-      color: #1e3a8a;
+      color: ${branding.accentColor || '#1e3a8a'};
       text-transform: uppercase;
       letter-spacing: -0.01em;
     }
@@ -322,8 +341,8 @@ export default function Receipt({ sale, onClose }) {
     .doc-type {
       display: inline-block;
       background: #eff6ff;
-      border: 1.5px solid #2563eb;
-      color: #1d4ed8;
+      border: 1.5px solid ${branding.accentColor || '#2563eb'};
+      color: ${branding.accentColor || '#1d4ed8'};
       font-size: 13px;
       font-weight: 800;
       padding: 5px 12px;
@@ -416,7 +435,7 @@ export default function Receipt({ sale, onClose }) {
       border-bottom: 1px solid #f1f5f9;
     }
     .totals-table tr.grand-row td {
-      background: #1e3a8a;
+      background: ${branding.accentColor || '#1e3a8a'};
       color: #ffffff;
       font-size: 14.5px;
       font-weight: 800;
@@ -492,9 +511,35 @@ export default function Receipt({ sale, onClose }) {
 <body>
   <div class="invoice-box">
     <!-- Header Block -->
+    ${branding.headerLayout === 'logo-center' ? `
+    <table class="header-table" style="text-align: center;">
+      <tr>
+        <td colspan="2" style="text-align: center; padding-bottom: 8px;">
+          ${branding.logoDataUrl && branding.headerLayout !== 'text-only' ? `<div style="margin-bottom: 6px;"><img src="${branding.logoDataUrl}" alt="Logo" style="max-height: 55px; max-width: 180px; object-fit: contain;" /></div>` : ''}
+          <div class="store-title">${store.name}</div>
+          ${store.tagline ? `<div class="store-sub">${store.tagline}</div>` : ''}
+          <div class="store-address">
+            ${fullAddress} ${store.phone ? `&bull; Phone: ${store.phone}` : ''} ${store.email ? `&bull; ${store.email}` : ''}<br/>
+            ${store.gstin ? `<strong>GSTIN:</strong> ${store.gstin} &nbsp;|&nbsp; ` : ''}
+            ${store.pan ? `<strong>PAN:</strong> ${store.pan}` : ''}
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="text-align: left; vertical-align: bottom; padding-top: 8px;">
+          <div class="doc-type">${branding.invoiceTitle || 'TAX INVOICE / BILL'}</div>
+          <div class="doc-original">Original for Recipient</div>
+        </td>
+        <td style="text-align: right; vertical-align: bottom; padding-top: 8px; font-size: 12px;">
+          <div><strong>Invoice No:</strong> <span style="font-family: monospace; font-size: 13px; color: ${branding.accentColor || '#1e3a8a'}; font-weight: 700;">${sale.saleNumber}</span></div>
+          <div><strong>Date:</strong> ${fmtDate(sale.saleDate)} &nbsp;|&nbsp; <strong>Billed By:</strong> ${cashierName}</div>
+        </td>
+      </tr>
+    </table>
+    ` : branding.headerLayout === 'logo-right' ? `
     <table class="header-table">
       <tr>
-        <td style="vertical-align: top; width: 62%;">
+        <td style="vertical-align: top; width: 60%;">
           <div class="store-title">${store.name}</div>
           ${store.tagline ? `<div class="store-sub">${store.tagline}</div>` : ''}
           <div class="store-address">
@@ -505,17 +550,49 @@ export default function Receipt({ sale, onClose }) {
             ${store.pan ? `<strong>PAN:</strong> ${store.pan}` : ''}
           </div>
         </td>
-        <td class="invoice-badge-box" style="vertical-align: top; width: 38%;">
-          <div class="doc-type">TAX INVOICE / BILL</div>
+        <td class="invoice-badge-box" style="vertical-align: top; width: 40%; text-align: right;">
+          ${branding.logoDataUrl && branding.headerLayout !== 'text-only' ? `<div style="margin-bottom: 8px;"><img src="${branding.logoDataUrl}" alt="Logo" style="max-height: 52px; max-width: 150px; object-fit: contain;" /></div>` : ''}
+          <div class="doc-type">${branding.invoiceTitle || 'TAX INVOICE / BILL'}</div>
           <div class="doc-original">Original for Recipient</div>
-          <div style="margin-top: 10px; font-size: 12px;">
-            <div><strong>Invoice No:</strong> <span style="font-family: monospace; font-size: 13px; color: #1e3a8a;">${sale.saleNumber}</span></div>
+          <div style="margin-top: 8px; font-size: 12px;">
+            <div><strong>Invoice No:</strong> <span style="font-family: monospace; font-size: 13px; color: ${branding.accentColor || '#1e3a8a'}; font-weight: 700;">${sale.saleNumber}</span></div>
             <div><strong>Date:</strong> ${fmtDate(sale.saleDate)}</div>
             <div><strong>Billed By:</strong> ${cashierName}</div>
           </div>
         </td>
       </tr>
     </table>
+    ` : `
+    <table class="header-table">
+      <tr>
+        <td style="vertical-align: top; width: 62%;">
+          <div style="display: flex; align-items: flex-start; gap: 14px;">
+            ${branding.logoDataUrl && branding.headerLayout !== 'text-only' ? `<div><img src="${branding.logoDataUrl}" alt="Logo" style="max-height: 55px; max-width: 160px; object-fit: contain; margin-top: 2px;" /></div>` : ''}
+            <div>
+              <div class="store-title">${store.name}</div>
+              ${store.tagline ? `<div class="store-sub">${store.tagline}</div>` : ''}
+              <div class="store-address">
+                ${fullAddress}<br/>
+                ${store.phone ? `<strong>Phone:</strong> ${store.phone} &nbsp;|&nbsp; ` : ''}
+                ${store.email ? `<strong>Email:</strong> ${store.email}` : ''}<br/>
+                ${store.gstin ? `<strong>GSTIN:</strong> ${store.gstin} &nbsp;|&nbsp; ` : ''}
+                ${store.pan ? `<strong>PAN:</strong> ${store.pan}` : ''}
+              </div>
+            </div>
+          </div>
+        </td>
+        <td class="invoice-badge-box" style="vertical-align: top; width: 38%;">
+          <div class="doc-type">${branding.invoiceTitle || 'TAX INVOICE / BILL'}</div>
+          <div class="doc-original">Original for Recipient</div>
+          <div style="margin-top: 10px; font-size: 12px;">
+            <div><strong>Invoice No:</strong> <span style="font-family: monospace; font-size: 13px; color: ${branding.accentColor || '#1e3a8a'}; font-weight: 700;">${sale.saleNumber}</span></div>
+            <div><strong>Date:</strong> ${fmtDate(sale.saleDate)}</div>
+            <div><strong>Billed By:</strong> ${cashierName}</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+    `}
 
     <!-- Buyer & Bill Details Table -->
     <table class="info-table">
@@ -587,7 +664,7 @@ export default function Receipt({ sale, onClose }) {
           <div style="font-weight: 600; color: #111827; margin-top: 3px;">${amountInWords(grandTotal)}</div>
         </div>
 
-        ${qrDataUrl ? `
+        ${qrDataUrl && branding.showQrOnA4 ? `
           <div class="upi-card">
             <img src="${qrDataUrl}" width="82" height="82" alt="UPI QR" style="border-radius: 6px; border: 1px solid #d8b4fe;" />
             <div>
@@ -599,10 +676,10 @@ export default function Receipt({ sale, onClose }) {
           </div>
         ` : ''}
 
-        ${store.terms ? `
+        ${(branding.termsAndConditions || store.terms) && branding.showTermsOnA4 ? `
           <div class="terms-block">
-            <strong>Terms & Conditions:</strong><br/>
-            ${store.terms}
+            <strong>Terms &amp; Conditions:</strong><br/>
+            ${branding.termsAndConditions || store.terms}
           </div>
         ` : ''}
       </div>
@@ -640,8 +717,9 @@ export default function Receipt({ sale, onClose }) {
     <!-- Signatures -->
     <div class="footer-signatures">
       <div class="sign-col">
-        <div style="font-size: 11px; color: #6b7280;">Thank you for your business!</div>
-        <div style="font-size: 10px; color: #9ca3af; margin-top: 3px;">Computer generated tax invoice.</div>
+        <div style="font-size: 11px; color: #6b7280; font-weight: 600;">${branding.footerMessage || 'Thank you for your business!'}</div>
+        ${branding.footerNote ? `<div style="font-size: 9.5px; color: #9ca3af; margin-top: 2px;">${branding.footerNote}</div>` : ''}
+        <div style="font-size: 9px; color: #9ca3af; margin-top: 2px;">Computer generated tax invoice.</div>
       </div>
       <div class="sign-col" style="text-align: right;">
         <div class="stamp-text" style="margin-bottom: 35px;">For ${store.name}</div>
@@ -760,6 +838,14 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
           >
             <i className="ti ti-edit" /> {showCustomize ? 'Hide Edit' : 'Edit Store & UPI'}
           </button>
+          <a
+            href="/settings"
+            className="btn btn-secondary btn-sm"
+            title="Open Branding & Invoice Customizer in Settings"
+            style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <i className="ti ti-brush" /> Logo &amp; Branding
+          </a>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -919,9 +1005,14 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
             }}
           >
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #2563eb', paddingBottom: 14, marginBottom: 14 }}>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
+            {branding.headerLayout === 'logo-center' ? (
+              <div style={{ borderBottom: `2px solid ${branding.accentColor || '#2563eb'}`, paddingBottom: 14, marginBottom: 14, textAlign: 'center' }}>
+                {branding.logoDataUrl && branding.headerLayout !== 'text-only' && (
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
+                    <img src={branding.logoDataUrl} alt="Logo" style={{ maxHeight: 52, maxWidth: 160, objectFit: 'contain' }} />
+                  </div>
+                )}
+                <div style={{ fontSize: 20, fontWeight: 800, color: branding.accentColor || '#1e3a8a', textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
                   {store.name}
                 </div>
                 {store.tagline && (
@@ -930,28 +1021,98 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: '#4b5563', marginTop: 4, lineHeight: 1.4 }}>
-                  {fullAddress}<br />
-                  {store.phone && <span><strong>Tel:</strong> {store.phone} &nbsp;|&nbsp; </span>}
-                  {store.email && <span><strong>Email:</strong> {store.email}</span>}<br />
+                  {fullAddress} {store.phone && <span>&bull; Tel: {store.phone} </span>} {store.email && <span>&bull; {store.email}</span>}<br />
                   {store.gstin && <span><strong>GSTIN:</strong> {store.gstin} &nbsp;|&nbsp; </span>}
                   {store.pan && <span><strong>PAN:</strong> {store.pan}</span>}
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ display: 'inline-block', background: '#eff6ff', border: `1.5px solid ${branding.accentColor || '#2563eb'}`, color: branding.accentColor || '#1d4ed8', fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 5, textTransform: 'uppercase' }}>
+                    {branding.invoiceTitle || 'TAX INVOICE / BILL'}
+                  </div>
+                  <div style={{ fontSize: 11.5, textAlign: 'right' }}>
+                    <span><strong>Invoice #:</strong> <span style={{ fontFamily: 'monospace', color: branding.accentColor || '#1e3a8a', fontWeight: 700 }}>{sale.saleNumber}</span></span>
+                    <span style={{ marginLeft: 12 }}><strong>Date:</strong> {fmtDate(sale.saleDate)}</span>
+                  </div>
+                </div>
               </div>
+            ) : branding.headerLayout === 'logo-right' ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `2px solid ${branding.accentColor || '#2563eb'}`, paddingBottom: 14, marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: branding.accentColor || '#1e3a8a', textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
+                    {store.name}
+                  </div>
+                  {store.tagline && (
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {store.tagline}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: '#4b5563', marginTop: 4, lineHeight: 1.4 }}>
+                    {fullAddress}<br />
+                    {store.phone && <span><strong>Tel:</strong> {store.phone} &nbsp;|&nbsp; </span>}
+                    {store.email && <span><strong>Email:</strong> {store.email}</span>}<br />
+                    {store.gstin && <span><strong>GSTIN:</strong> {store.gstin} &nbsp;|&nbsp; </span>}
+                    {store.pan && <span><strong>PAN:</strong> {store.pan}</span>}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  {branding.logoDataUrl && branding.headerLayout !== 'text-only' && (
+                    <div style={{ marginBottom: 6 }}>
+                      <img src={branding.logoDataUrl} alt="Logo" style={{ maxHeight: 50, maxWidth: 150, objectFit: 'contain' }} />
+                    </div>
+                  )}
+                  <div style={{ display: 'inline-block', background: '#eff6ff', border: `1.5px solid ${branding.accentColor || '#2563eb'}`, color: branding.accentColor || '#1d4ed8', fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 5, textTransform: 'uppercase' }}>
+                    {branding.invoiceTitle || 'TAX INVOICE / BILL'}
+                  </div>
+                  <div style={{ fontSize: 9.5, color: '#6b7280', textTransform: 'uppercase', marginTop: 2 }}>Original for Recipient</div>
+                  <div style={{ marginTop: 6, fontSize: 11.5 }}>
+                    <div><strong>Invoice #:</strong> <span style={{ fontFamily: 'monospace', color: branding.accentColor || '#1e3a8a', fontWeight: 700 }}>{sale.saleNumber}</span></div>
+                    <div><strong>Date:</strong> {fmtDate(sale.saleDate)}</div>
+                    <div><strong>Billed By:</strong> {cashierName}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `2px solid ${branding.accentColor || '#2563eb'}`, paddingBottom: 14, marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                  {branding.logoDataUrl && branding.headerLayout !== 'text-only' && (
+                    <div>
+                      <img src={branding.logoDataUrl} alt="Logo" style={{ maxHeight: 52, maxWidth: 150, objectFit: 'contain', marginTop: 2 }} />
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: branding.accentColor || '#1e3a8a', textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
+                      {store.name}
+                    </div>
+                    {store.tagline && (
+                      <div style={{ fontSize: 10.5, fontWeight: 600, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {store.tagline}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, color: '#4b5563', marginTop: 4, lineHeight: 1.4 }}>
+                      {fullAddress}<br />
+                      {store.phone && <span><strong>Tel:</strong> {store.phone} &nbsp;|&nbsp; </span>}
+                      {store.email && <span><strong>Email:</strong> {store.email}</span>}<br />
+                      {store.gstin && <span><strong>GSTIN:</strong> {store.gstin} &nbsp;|&nbsp; </span>}
+                      {store.pan && <span><strong>PAN:</strong> {store.pan}</span>}
+                    </div>
+                  </div>
+                </div>
 
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ display: 'inline-block', background: '#eff6ff', border: '1.5px solid #2563eb', color: '#1d4ed8', fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 5, textTransform: 'uppercase' }}>
-                  TAX INVOICE / BILL
-                </div>
-                <div style={{ fontSize: 9.5, color: '#6b7280', textTransform: 'uppercase', marginTop: 2 }}>
-                  Original for Recipient
-                </div>
-                <div style={{ marginTop: 8, fontSize: 11.5 }}>
-                  <div><strong>Invoice #:</strong> <span style={{ fontFamily: 'monospace', color: '#1e3a8a', fontWeight: 700 }}>{sale.saleNumber}</span></div>
-                  <div><strong>Date:</strong> {fmtDate(sale.saleDate)}</div>
-                  <div><strong>Billed By:</strong> {cashierName}</div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ display: 'inline-block', background: '#eff6ff', border: `1.5px solid ${branding.accentColor || '#2563eb'}`, color: branding.accentColor || '#1d4ed8', fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 5, textTransform: 'uppercase' }}>
+                    {branding.invoiceTitle || 'TAX INVOICE / BILL'}
+                  </div>
+                  <div style={{ fontSize: 9.5, color: '#6b7280', textTransform: 'uppercase', marginTop: 2 }}>
+                    Original for Recipient
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11.5 }}>
+                    <div><strong>Invoice #:</strong> <span style={{ fontFamily: 'monospace', color: branding.accentColor || '#1e3a8a', fontWeight: 700 }}>{sale.saleNumber}</span></div>
+                    <div><strong>Date:</strong> {fmtDate(sale.saleDate)}</div>
+                    <div><strong>Billed By:</strong> {cashierName}</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Buyer & Payment Meta Box */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 16, overflow: 'hidden' }}>
@@ -1020,30 +1181,32 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
                 </div>
 
                 {/* Scan & Pay UPI Interactive Card */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', background: '#faf5ff', marginBottom: 10 }}>
-                  <div style={{ background: '#fff', padding: 4, borderRadius: 6, border: '1px solid #d8b4fe' }}>
-                    <QRCodeCanvas value={upiString} size={78} level="M" />
+                {branding.showQrOnA4 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', background: '#faf5ff', marginBottom: 10 }}>
+                    <div style={{ background: '#fff', padding: 4, borderRadius: 6, border: '1px solid #d8b4fe' }}>
+                      <QRCodeCanvas value={upiString} size={78} level="M" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10.5, fontWeight: 800, color: '#6b21a8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Scan & Pay via UPI
+                      </div>
+                      <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>
+                        GPay, PhonePe, Paytm, BHIM, CRED
+                      </div>
+                      <div style={{ fontSize: 10.5, fontFamily: 'monospace', fontWeight: 700, color: '#1e1b4b', marginTop: 3 }}>
+                        {upiId}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: '#7e22ce', fontWeight: 700, marginTop: 2 }}>
+                        Amount: {fmtCurrency(upiPayAmount)}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 10.5, fontWeight: 800, color: '#6b21a8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Scan & Pay via UPI
-                    </div>
-                    <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2 }}>
-                      GPay, PhonePe, Paytm, BHIM, CRED
-                    </div>
-                    <div style={{ fontSize: 10.5, fontFamily: 'monospace', fontWeight: 700, color: '#1e1b4b', marginTop: 3 }}>
-                      {upiId}
-                    </div>
-                    <div style={{ fontSize: 10.5, color: '#7e22ce', fontWeight: 700, marginTop: 2 }}>
-                      Amount: {fmtCurrency(upiPayAmount)}
-                    </div>
-                  </div>
-                </div>
+                )}
 
-                {store.terms && (
+                {(branding.termsAndConditions || store.terms) && branding.showTermsOnA4 && (
                   <div style={{ fontSize: 9.5, color: '#64748b', lineHeight: 1.4, whiteSpace: 'pre-line' }}>
                     <strong>Terms & Conditions:</strong><br />
-                    {store.terms}
+                    {branding.termsAndConditions || store.terms}
                   </div>
                 )}
               </div>
@@ -1060,7 +1223,7 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
                       <span style={{ fontFamily: 'monospace' }}>Included</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 10px', background: '#1e3a8a', color: '#fff', fontWeight: 800, fontSize: 13.5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 10px', background: branding.accentColor || '#1e3a8a', color: '#fff', fontWeight: 800, fontSize: 13.5 }}>
                     <span>Grand Total:</span>
                     <span style={{ fontFamily: 'monospace' }}>{fmtCurrency(grandTotal)}</span>
                   </div>
@@ -1081,7 +1244,8 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
             {/* Footer Signatures */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #e5e7eb', paddingTop: 14, marginTop: 20 }}>
               <div style={{ fontSize: 10, color: '#6b7280' }}>
-                <div>Thank you for your business!</div>
+                <div style={{ fontWeight: 600 }}>${branding.footerMessage || 'Thank you for your business!'}</div>
+                {branding.footerNote && <div style={{ fontSize: 9.5, color: '#9ca3af', marginTop: 2 }}>${branding.footerNote}</div>}
                 <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 2 }}>Computer generated tax invoice.</div>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -1108,7 +1272,12 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
             }}
           >
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase' }}>{store.name}</div>
+              {branding.logoDataUrl && branding.showLogoOnThermal && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+                  <img src={branding.logoDataUrl} alt="Logo" style={{ maxHeight: 42, maxWidth: 130, objectFit: 'contain' }} />
+                </div>
+              )}
+              <div style={{ fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase', color: branding.accentColor || '#111827' }}>{store.name}</div>
               {store.tagline && <div style={{ fontSize: 9.5 }}>{store.tagline}</div>}
               <div style={{ fontSize: 9.5 }}>{fullAddress}</div>
               {store.phone && <div style={{ fontSize: 9.5 }}>Phone: {store.phone}</div>}
@@ -1180,23 +1349,28 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
             )}
 
             {/* UPI QR in Thermal Slip */}
-            <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
-            <div style={{ textAlign: 'center', margin: '6px 0' }}>
-              <div style={{ fontSize: 9.5, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 }}>
-                SCAN & PAY VIA UPI
-              </div>
-              <div style={{ display: 'inline-block', background: '#fff', padding: 4, border: '1px solid #ccc' }}>
-                <QRCodeCanvas value={upiString} size={90} level="M" />
-              </div>
-              <div style={{ fontSize: 8.5, fontFamily: 'monospace', marginTop: 3 }}>
-                UPI: {upiId}
-              </div>
-            </div>
+            {branding.showQrOnThermal && (
+              <>
+                <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+                <div style={{ textAlign: 'center', margin: '6px 0' }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 }}>
+                    SCAN & PAY VIA UPI
+                  </div>
+                  <div style={{ display: 'inline-block', background: '#fff', padding: 4, border: '1px solid #ccc' }}>
+                    <QRCodeCanvas value={upiString} size={90} level="M" />
+                  </div>
+                  <div style={{ fontSize: 8.5, fontFamily: 'monospace', marginTop: 3 }}>
+                    UPI: {upiId}
+                  </div>
+                </div>
+              </>
+            )}
 
             <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
 
             <div style={{ textAlign: 'center', fontSize: 9.5, marginTop: 6 }}>
-              <div>*** Thank You for Shopping! ***</div>
+              <div style={{ fontWeight: 'bold' }}>{branding.footerMessage || '*** Thank You for Shopping! ***'}</div>
+              {branding.footerNote && <div style={{ fontSize: 8.5, marginTop: 2 }}>{branding.footerNote}</div>}
               <div style={{ fontSize: 8.5, marginTop: 2 }}>Computer Generated Bill</div>
             </div>
           </div>
