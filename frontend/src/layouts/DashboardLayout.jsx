@@ -145,6 +145,26 @@ export default function DashboardLayout() {
   const [gstOpen, setGstOpen] = useState(loc.pathname.startsWith('/gst'));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [lowStockCount, setLowStockCount] = useState(0);
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (installPrompt) {
+      installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      if (outcome === 'accepted') setInstallPrompt(null);
+    } else {
+      alert('To install InventoryPro: on Chrome/Edge click the Install icon in the address bar, or on Safari tap Share -> Add to Home Screen.');
+    }
+  };
 
   useEffect(() => {
     productApi
@@ -328,6 +348,22 @@ export default function DashboardLayout() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <button
+                onClick={handleInstallApp}
+                className="btn btn-secondary btn-sm"
+                aria-label="Install App"
+                style={{
+                  gap: 6,
+                  color: 'var(--brand)',
+                  borderColor: 'rgba(99, 102, 241, 0.3)',
+                  background: 'rgba(99, 102, 241, 0.08)',
+                }}
+                title="Install InventoryPro as a standalone desktop or mobile application"
+              >
+                <i className="ti ti-device-mobile-down" style={{ fontSize: 14 }} />
+                <span className="cmdk-label" style={{ fontWeight: 600 }}>Install App</span>
+              </button>
+
               <button
                 onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
                 className="btn btn-secondary btn-sm"

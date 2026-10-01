@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { purchaseApi } from '../../api/purchaseApi';
 import { productApi } from '../../api/productApi';
 import { supplierApi } from '../../api/supplierApi';
@@ -13,7 +14,125 @@ function statusBadge(s) {
   return <span className={`badge ${map[s] || 'badge-neutral'}`}>{s}</span>;
 }
 
-function NewPurchaseModal({ onClose, onSaved }) {
+function PurchaseSlipModal({ purchase, onClose }) {
+  if (!purchase) return null;
+
+  const handlePrint = () => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    const itemsHtml = (purchase.items || []).map((item, idx) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${idx + 1}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">${item.productName || 'Item'}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${item.quantity}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">₹${Number(item.unitCost || 0).toFixed(2)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">₹${Number(item.lineTotal || (item.quantity * item.unitCost) || 0).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Purchase Order - ${purchase.purchaseNumber}</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 30px; color: #111; }
+          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #111; padding-bottom: 14px; margin-bottom: 20px; }
+          .title { font-size: 22px; font-weight: bold; text-transform: uppercase; }
+          table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+          th { text-align: left; padding: 8px; background: #f4f4f4; border-bottom: 2px solid #ccc; font-size: 12px; }
+          .totals { margin-top: 20px; text-align: right; font-size: 15px; }
+          .sign-box { margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="title">PURCHASE ORDER</div>
+            <div style="font-size: 13px; color: #555; margin-top: 4px;">PO #: <strong>${purchase.purchaseNumber}</strong></div>
+            <div style="font-size: 13px; color: #555;">Date: ${fmtDate(purchase.purchaseDate)}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-weight: bold; font-size: 14px;">SUPPLIER / VENDOR</div>
+            <div style="font-size: 13px; color: #333; margin-top: 4px;">${purchase.supplierName || 'General Supplier'}</div>
+            <div style="font-size: 12px; color: #666; margin-top: 4px;">Status: <strong>${purchase.status}</strong></div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 30px;">#</th>
+              <th>Product Description</th>
+              <th style="text-align: right; width: 80px;">Qty</th>
+              <th style="text-align: right; width: 110px;">Unit Cost</th>
+              <th style="text-align: right; width: 120px;">Line Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml || '<tr><td colspan="5" style="text-align: center; padding: 20px;">No items recorded</td></tr>'}
+          </tbody>
+        </table>
+
+        <div class="totals">
+          <div>Total Procurement Value: <strong style="font-size: 18px;">${fmtCurrency(purchase.totalAmount)}</strong></div>
+        </div>
+
+        <div class="sign-box">
+          <div>Authorized By: ___________________</div>
+          <div>Received By (Vendor): ___________________</div>
+        </div>
+      </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 1500);
+    }, 400);
+  };
+
+  return (
+    <Modal title={`Purchase Order · ${purchase.purchaseNumber}`} onClose={onClose} maxWidth={560}>
+      <div style={{ padding: '4px 0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div className="card card-pad" style={{ padding: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Supplier</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 4 }}>{purchase.supplierName || 'General Vendor'}</div>
+          </div>
+          <div className="card card-pad" style={{ padding: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Total Amount</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--brand)', marginTop: 4 }}>{fmtCurrency(purchase.totalAmount)}</div>
+          </div>
+        </div>
+
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+          Created: {fmtDate(purchase.purchaseDate)} · Status: <strong>{purchase.status}</strong>
+        </div>
+
+        <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
+          <button type="button" className="btn btn-primary" onClick={handlePrint}>
+            <i className="ti ti-printer" /> Print PO Slip
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function NewPurchaseModal({ onClose, onSaved, prefilledProductId, autoFillLowStock }) {
   const [products, setProducts] = useState([]);
   const [supplierName, setSupplierName] = useState('');
   const [knownSuppliers, setKnownSuppliers] = useState([]);
@@ -24,9 +143,51 @@ function NewPurchaseModal({ onClose, onSaved }) {
   const toast = useToast();
 
   useEffect(() => {
-    productApi.list({ page: 0, size: 200 }).then((r) => setProducts(r.data.data.content || [])).catch(() => {}).finally(() => setLoadingProducts(false));
-    supplierApi.list({ page: 0, size: 200 }).then((r) => setKnownSuppliers(r.data.data.content || [])).catch(() => {});
-  }, []);
+    Promise.all([
+      productApi.list({ page: 0, size: 200 }),
+      supplierApi.list({ page: 0, size: 200 }).catch(() => ({ data: { data: { content: [] } } }))
+    ]).then(([prodRes, suppRes]) => {
+      const prods = prodRes.data?.data?.content || [];
+      setProducts(prods);
+      setKnownSuppliers(suppRes.data?.data?.content || []);
+
+      if (autoFillLowStock) {
+        const low = prods.filter((p) => p.stockQuantity <= p.reorderLevel);
+        if (low.length > 0) {
+          setLines(low.map((p) => ({
+            productId: String(p.id),
+            quantity: Math.max(1, (p.reorderLevel * 2) - p.stockQuantity),
+            unitCost: p.price ? String(p.price) : '0',
+          })));
+          toast.info(`Auto-filled ${low.length} low-stock item(s)`);
+        }
+      } else if (prefilledProductId) {
+        const target = prods.find((p) => String(p.id) === String(prefilledProductId));
+        if (target) {
+          setLines([{
+            productId: String(target.id),
+            quantity: Math.max(1, (target.reorderLevel * 2) - target.stockQuantity),
+            unitCost: target.price ? String(target.price) : '0',
+          }]);
+        }
+      }
+    }).catch(() => {})
+    .finally(() => setLoadingProducts(false));
+  }, [prefilledProductId, autoFillLowStock]);
+
+  const handleAutoFillLowStock = () => {
+    const low = products.filter((p) => p.stockQuantity <= p.reorderLevel);
+    if (low.length === 0) {
+      toast.info('No products currently below reorder level!');
+      return;
+    }
+    setLines(low.map((p) => ({
+      productId: String(p.id),
+      quantity: Math.max(1, (p.reorderLevel * 2) - p.stockQuantity),
+      unitCost: p.price ? String(p.price) : '0',
+    })));
+    toast.success(`Populated ${low.length} low-stock product(s)`);
+  };
 
   const updateLine = (i, key, val) => setLines((p) => p.map((l, idx) => {
     if (idx !== i) return l;
@@ -66,7 +227,7 @@ function NewPurchaseModal({ onClose, onSaved }) {
   };
 
   return (
-    <Modal title="Create Purchase Order" onClose={onClose} maxWidth={600}>
+    <Modal title="Create Purchase Order" onClose={onClose} maxWidth={650}>
       {error && <div className="banner banner-error"><i className="ti ti-alert-circle" /><span>{error}</span></div>}
 
       {loadingProducts ? (
@@ -82,12 +243,25 @@ function NewPurchaseModal({ onClose, onSaved }) {
         />
       ) : (
         <form onSubmit={submit}>
-          <div style={{ marginBottom: 14 }}>
-            <label className="field-label">Supplier (optional)</label>
-            <input className="field-input" list="known-suppliers" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Acme Distributors" />
-            <datalist id="known-suppliers">
-              {knownSuppliers.map((s) => <option key={s.id} value={s.name} />)}
-            </datalist>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div style={{ flex: 1, marginRight: 12 }}>
+              <label className="field-label">Supplier (optional)</label>
+              <input className="field-input" list="known-suppliers" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Acme Distributors" />
+              <datalist id="known-suppliers">
+                {knownSuppliers.map((s) => <option key={s.id} value={s.name} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="field-label" style={{ opacity: 0 }}>Action</label>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleAutoFillLowStock}
+                title="Automatically add all products currently below safety stock"
+              >
+                <i className="ti ti-bolt" style={{ color: '#f59e0b' }} /> Auto-Fill Low Stock
+              </button>
+            </div>
           </div>
 
           <label className="field-label">Items to Restock</label>
@@ -95,7 +269,11 @@ function NewPurchaseModal({ onClose, onSaved }) {
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.6fr 0.7fr 0.9fr 32px', gap: 8, marginBottom: 8 }} className="item-row-grid">
               <select className="field-input" value={line.productId} onChange={(e) => updateLine(i, 'productId', e.target.value)}>
                 <option value="">Select product…</option>
-                {products.map((prod) => <option key={prod.id} value={prod.id}>{prod.name} · {prod.stockQuantity} in stock</option>)}
+                {products.map((prod) => (
+                  <option key={prod.id} value={prod.id}>
+                    {prod.name} ({prod.stockQuantity} in stock, min: {prod.reorderLevel})
+                  </option>
+                ))}
               </select>
               <input className="field-input" type="number" min="1" placeholder="Qty" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)} />
               <input className="field-input" type="number" min="0" step="0.01" placeholder="Unit cost" value={line.unitCost} onChange={(e) => updateLine(i, 'unitCost', e.target.value)} />
@@ -109,8 +287,8 @@ function NewPurchaseModal({ onClose, onSaved }) {
           </button>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid var(--glass-border)', marginBottom: 4 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Total cost</span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{fmtCurrency(total)}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Total Procurement Cost</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--brand)', fontFamily: 'var(--font-display)' }}>{fmtCurrency(total)}</span>
           </div>
 
           <div className="modal-actions">
@@ -129,11 +307,15 @@ function NewPurchaseModal({ onClose, onSaved }) {
 const STATUSES = ['', 'ORDERED', 'RECEIVED', 'CANCELLED'];
 
 export default function Purchases() {
+  const location = useLocation();
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [showNew, setShowNew] = useState(false);
+  const [prefilledProductId, setPrefilledProductId] = useState(null);
+  const [autoFillLowStock, setAutoFillLowStock] = useState(false);
+  const [viewSlip, setViewSlip] = useState(null);
   const [filters, setFilters] = useState({ from: '', to: '', status: '', supplier: '' });
   const [showFilters, setShowFilters] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -141,6 +323,16 @@ export default function Purchases() {
   const [cancelling, setCancelling] = useState(false);
   const [exporting, setExporting] = useState(false);
   const toast = useToast();
+
+  useEffect(() => {
+    if (location.state?.reorderProductId) {
+      setPrefilledProductId(location.state.reorderProductId);
+      setShowNew(true);
+    } else if (location.state?.autoFillLowStock) {
+      setAutoFillLowStock(true);
+      setShowNew(true);
+    }
+  }, [location.state]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -151,7 +343,7 @@ export default function Purchases() {
         from: filters.from || undefined, to: filters.to || undefined,
         status: filters.status || undefined, supplier: filters.supplier || undefined,
       })
-      .then((r) => { setPurchases(r.data.data.content || []); setTotalPages(r.data.data.totalPages || 0); })
+      .then((r) => { setPurchases(r.data?.data?.content || []); setTotalPages(r.data?.data?.totalPages || 0); })
       .catch((err) => {
         setLoadError(err.response?.data?.message || (err.request ? 'Could not reach the server.' : 'Failed to load purchases.'));
         setPurchases([]);
@@ -161,14 +353,29 @@ export default function Purchases() {
 
   useEffect(() => { load(); }, [load]);
 
-  const onSaved = () => { setShowNew(false); setPage(0); load(); };
+  const onSaved = () => {
+    setShowNew(false);
+    setPrefilledProductId(null);
+    setAutoFillLowStock(false);
+    load();
+  };
+
+  const receivePurchase = async (id) => {
+    try {
+      await purchaseApi.receive(id);
+      toast.success('Purchase received, stock incremented');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to receive purchase');
+    }
+  };
 
   const handleConfirmCancel = async () => {
     if (!cancelPurchaseItem) return;
     setCancelling(true);
     try {
       await purchaseApi.cancel(cancelPurchaseItem.id);
-      toast.success('Purchase cancelled, stock reversed');
+      toast.success('Purchase cancelled and stock reversed');
       setCancelPurchaseItem(null);
       load();
     } catch (err) {
@@ -178,25 +385,12 @@ export default function Purchases() {
     }
   };
 
-  const receivePurchase = async (id) => {
-    try {
-      await purchaseApi.receive(id);
-      toast.success('Marked received — stock added');
-      load();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not mark as received');
-    }
-  };
-
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   const exportCsv = async () => {
     setExporting(true);
     try {
-      const r = await purchaseApi.export({
-        from: filters.from || undefined, to: filters.to || undefined,
-        status: filters.status || undefined, supplier: filters.supplier || undefined,
-      });
+      const r = await purchaseApi.export(filters);
       downloadBlob(r.data, 'purchases.csv');
       toast.success('Purchases exported');
     } catch (err) {
@@ -289,11 +483,18 @@ export default function Purchases() {
                 <tr key={p.id} style={{ opacity: p.status === 'CANCELLED' ? 0.55 : 1 }}>
                   <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--brand)', fontWeight: 600 }}>{p.purchaseNumber}</td>
                   <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(p.purchaseDate)}</td>
-                  <td>{p.supplierName || 'Unspecified'}</td>
+                  <td>{p.supplierName || 'General Supplier'}</td>
                   <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtCurrency(p.totalAmount)}</td>
                   <td>{statusBadge(p.status)}</td>
                   <td style={{ textAlign: 'right' }}>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button
+                        className="btn btn-ghost btn-icon btn-sm"
+                        title="View / Print PO Slip"
+                        onClick={() => setViewSlip(p)}
+                      >
+                        <i className="ti ti-printer" style={{ fontSize: 13 }} />
+                      </button>
                       {p.status === 'ORDERED' && (
                         <button className="btn btn-secondary btn-sm" onClick={() => receivePurchase(p.id)}>
                           <i className="ti ti-package-import" /> Receive
@@ -321,7 +522,21 @@ export default function Purchases() {
         </div>
       )}
 
-      {showNew && <NewPurchaseModal onClose={() => setShowNew(false)} onSaved={onSaved} />}
+      {showNew && (
+        <NewPurchaseModal
+          onClose={() => { setShowNew(false); setPrefilledProductId(null); setAutoFillLowStock(false); }}
+          onSaved={onSaved}
+          prefilledProductId={prefilledProductId}
+          autoFillLowStock={autoFillLowStock}
+        />
+      )}
+
+      {viewSlip && (
+        <PurchaseSlipModal
+          purchase={viewSlip}
+          onClose={() => setViewSlip(null)}
+        />
+      )}
 
       {cancelPurchaseItem && (
         <ConfirmDialog

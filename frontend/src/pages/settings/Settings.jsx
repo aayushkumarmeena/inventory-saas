@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
@@ -6,7 +6,9 @@ import { teamApi } from '../../api/teamApi';
 import { productApi } from '../../api/productApi';
 import { salesApi } from '../../api/salesApi';
 import { purchaseApi } from '../../api/purchaseApi';
-import { downloadBlob } from '../../utils/formatters';
+import { customerApi } from '../../api/customerApi';
+import { analyticsApi } from '../../api/analyticsApi';
+import { downloadBlob, fmtCurrency } from '../../utils/formatters';
 import Tabs from '../../components/Tabs';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
@@ -89,11 +91,31 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState('account');
   const [exportingType, setExportingType] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (installPrompt) {
+      installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      if (outcome === 'accepted') setInstallPrompt(null);
+    } else {
+      alert('To install InventoryPro: on Chrome/Edge click the Install icon in the address bar, or on Safari tap Share -> Add to Home Screen.');
+    }
+  };
 
   const TABS = [
     { id: 'account', label: 'Account Profile', icon: 'ti-user' },
-    { id: 'appearance', label: 'Appearance', icon: 'ti-palette' },
-    { id: 'data', label: 'Data Export', icon: 'ti-download' },
+    { id: 'appearance', label: 'Appearance & App', icon: 'ti-palette' },
+    { id: 'data', label: 'Data & Reports Export', icon: 'ti-download' },
     { id: 'security', label: 'Security', icon: 'ti-shield-lock' },
   ];
 
@@ -109,8 +131,31 @@ export default function Settings() {
       } else if (type === 'purchases') {
         const r = await purchaseApi.export();
         downloadBlob(r.data, 'purchases_backup.csv');
+      } else if (type === 'receivables') {
+        const r = await customerApi.list({ page: 0, size: 1000 });
+        const custs = r.data?.data?.content || [];
+        const header = "Customer Name,Phone,Email,Address,Total Orders,Total Spent,Outstanding Dues\n";
+        const rows = custs.map(c => `"${c.name.replace(/"/g, '""')}","${c.phone || ''}","${c.email || ''}","${(c.address || '').replace(/"/g, '""')}",${c.totalOrders || 0},${c.totalSpent || 0},${c.outstandingBalance || 0}`).join('\n');
+        downloadBlob(header + rows, `customer_receivables_${new Date().toISOString().slice(0, 10)}.csv`);
+      } else if (type === 'pnl') {
+        const r = await analyticsApi.profit(365);
+        const data = r.data?.data || {};
+        const header = "Date,Revenue,Cost of Goods Sold (COGS),Gross Profit,Net Margin %\n";
+        const rows = (data.trend || []).map(t => {
+          const rev = Number(t.revenue || 0);
+          const prof = Number(t.profit || 0);
+          const margin = rev > 0 ? ((prof / rev) * 100).toFixed(2) : '0';
+          return `${t.date},${rev},${t.cost || 0},${prof},${margin}%`;
+        }).join('\n');
+        downloadBlob(header + rows, `pnl_statement_annual_${new Date().toISOString().slice(0, 10)}.csv`);
+      } else if (type === 'inventory_audit') {
+        const r = await analyticsApi.inventoryIntel();
+        const items = r.data?.data?.items || [];
+        const header = "SKU,Product Name,Category,Price,Unit Cost,In Stock,Reorder Level,Velocity (Units/Day),Runway (Days),Health Status,Suggested Reorder,Stock Valuation\n";
+        const rows = items.map(i => `"${i.sku}","${i.name.replace(/"/g, '""')}","${i.category}",${i.price},${i.unitCost},${i.stockQuantity},${i.reorderLevel},${i.dailyVelocity},${i.runwayDays},"${i.badge}",${i.suggestedReorder},${i.stockValuation}`).join('\n');
+        downloadBlob(header + rows, `inventory_audit_report_${new Date().toISOString().slice(0, 10)}.csv`);
       }
-      toast.success(`${type.toUpperCase()} data exported`);
+      toast.success(`${type.toUpperCase()} report exported successfully`);
     } catch (err) {
       toast.error(`Failed to export ${type} data`);
     } finally {
@@ -119,11 +164,11 @@ export default function Settings() {
   };
 
   return (
-    <div className="page" style={{ maxWidth: 720 }}>
+    <div className="page" style={{ maxWidth: 740 }}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Workspace Settings</h1>
-          <p className="page-subtitle">Manage your credentials, preferences, visual theme, and data exports.</p>
+          <p className="page-subtitle">Manage credentials, preferences, visual themes, PWA installation, and audit report exports.</p>
         </div>
       </div>
 
@@ -159,15 +204,11 @@ export default function Settings() {
                   background: '#ffffff',
                   color: '#12131a',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <i className="ti ti-sun" style={{ fontSize: 20, color: '#f59e0b' }} />
-                  {theme === 'light' && <span className="badge badge-success">Active</span>}
-                </div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>Light Aurora</div>
-                <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 2 }}>Clean frosted glass with high contrast.</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>Light Theme</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>High-contrast clean white aesthetic</div>
               </div>
 
               <div
@@ -176,20 +217,31 @@ export default function Settings() {
                   padding: 16,
                   borderRadius: 12,
                   border: theme === 'dark' ? '2px solid var(--brand)' : '1px solid var(--glass-border)',
-                  background: '#161923',
-                  color: '#f1f2f6',
+                  background: '#0a0d1a',
+                  color: '#f8fafc',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <i className="ti ti-moon" style={{ fontSize: 20, color: '#818cf8' }} />
-                  {theme === 'dark' && <span className="badge badge-success">Active</span>}
-                </div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>Dark Aurora</div>
-                <div style={{ fontSize: 11.5, color: '#94a0b8', marginTop: 2 }}>Deep obsidian night with glowing accents.</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>Dark Glass Theme</div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Modern dark glass with vibrant neon accents</div>
               </div>
             </div>
+          </div>
+
+          <div className="card card-pad" style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }}>PWA Desktop & Tablet App</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14 }}>
+              Run InventoryPro as a standalone full-screen application on your desktop, POS cash register, iPad, or Android tablet.
+            </div>
+            <button
+              onClick={handleInstallApp}
+              className="btn btn-primary btn-sm"
+              style={{ gap: 8 }}
+            >
+              <i className="ti ti-device-mobile-down" style={{ fontSize: 16 }} />
+              Install Standalone App
+            </button>
           </div>
         </div>
       )}
@@ -197,12 +249,57 @@ export default function Settings() {
       {activeTab === 'data' && (
         <div className="stagger">
           <div className="card card-pad" style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }}>Data Export & Backups</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }}>Data Export & Financial Reports</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14 }}>
-              Download complete CSV archives of your business records at any time.
+              Download complete CSV archives and analytical audits of your business records at any time.
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 10, background: 'var(--surface-3)' }}>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>Profit & Loss (P&L) Statement CSV</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>Daily revenue, COGS, gross profits, and net margin %</div>
+                </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleExport('pnl')}
+                  disabled={exportingType === 'pnl'}
+                >
+                  {exportingType === 'pnl' ? <span className="spinner" /> : <i className="ti ti-download" />}
+                  Export P&L
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 10, background: 'var(--surface-3)' }}>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>Customer Khata & Receivables CSV</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>Accounts receivable ledger, client contacts, and pending balances</div>
+                </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleExport('receivables')}
+                  disabled={exportingType === 'receivables'}
+                >
+                  {exportingType === 'receivables' ? <span className="spinner" /> : <i className="ti ti-download" />}
+                  Export Ledger
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 10, background: 'var(--surface-3)' }}>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>Inventory Health & Stockout Audit CSV</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>Dead stock valuation, velocity runway, and suggested replenishment</div>
+                </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleExport('inventory_audit')}
+                  disabled={exportingType === 'inventory_audit'}
+                >
+                  {exportingType === 'inventory_audit' ? <span className="spinner" /> : <i className="ti ti-download" />}
+                  Export Audit
+                </button>
+              </div>
+
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 10, background: 'var(--surface-3)' }}>
                 <div>
                   <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>Products Catalog CSV</div>
