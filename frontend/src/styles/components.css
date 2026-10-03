@@ -810,6 +810,11 @@ to { opacity: 1; transform: translateY(0) scale(1); }
 50% { transform: translate(-35px, -25px); }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* Route/page entrance */
 .page {
 animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);

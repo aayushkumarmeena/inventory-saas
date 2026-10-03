@@ -12,6 +12,8 @@ import SaleDetail from './SaleDetail';
 import Receipt from './Receipt';
 import EmptyState from '../../components/EmptyState';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { offlineDB } from '../../utils/offlineDB';
+import { notifyOfflineSyncListeners } from '../../hooks/useOfflineStatus';
 
 function statusBadge(s) {
   const map = {
@@ -193,16 +195,49 @@ function NewSaleModal({ onClose, onSaved }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [queuedOffline, setQueuedOffline] = useState(false); // flag: last sale was queued
 
   const barcodeInputRef = useRef(null);
   const scannerInstanceRef = useRef(null);
   const toast = useToast();
 
+  // Track online/offline inside modal
   useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Try live API first, fall back to IndexedDB cache if offline
     productApi
       .list({ page: 0, size: 300 })
-      .then((r) => setProducts(r.data.data.content || []))
-      .catch(() => {})
+      .then(async (r) => {
+        const fetched = r.data.data.content || [];
+        setProducts(fetched);
+        // Cache for offline use
+        try {
+          await offlineDB.cacheProducts(fetched);
+          await offlineDB.markProductCacheTime();
+        } catch {}
+      })
+      .catch(async () => {
+        // Offline fallback — load from IndexedDB
+        try {
+          const cached = await offlineDB.getCachedProducts();
+          const real = (cached || []).filter((p) => p.id !== '__meta__');
+          if (real.length > 0) {
+            setProducts(real);
+            toast.warning('Offline mode — using cached product catalog', 4000);
+          }
+        } catch {}
+      })
       .finally(() => setLoadingProducts(false));
     customerApi.list({ page: 0, size: 200 }).then((r) => setKnownCustomers(r.data.data.content || [])).catch(() => {});
   }, []);
@@ -410,18 +445,85 @@ function NewSaleModal({ onClose, onSaved }) {
     }
     setSaving(true);
     setError('');
+    setQueuedOffline(false);
+
+    const payload = {
+      customerName: customerName || null,
+      paymentMethod: paymentMethod,
+      items: validLines.map((l) => ({ productId: Number(l.productId), quantity: Number(l.quantity) })),
+    };
+
+    // If offline, queue immediately without even trying the API
+    if (!navigator.onLine) {
+      try {
+        await offlineDB.queueSale(payload);
+        notifyOfflineSyncListeners();
+        posAudio.playSuccessChime();
+        setQueuedOffline(true);
+        // Build a fake sale object for the receipt preview so the counter isn't disrupted
+        const fakeId = `OFFLINE-${Date.now()}`;
+        const fakeSale = {
+          id: fakeId,
+          saleNumber: fakeId,
+          saleDate: new Date().toISOString(),
+          customerName: payload.customerName,
+          paymentMethod: payload.paymentMethod,
+          paymentStatus: 'PENDING',
+          items: validLines.map((l) => {
+            const prod = products.find((p) => String(p.id) === String(l.productId));
+            return { productName: prod?.name || `#${l.productId}`, quantity: l.quantity, unitPrice: prod?.price || 0 };
+          }),
+          _offline: true,
+        };
+        toast.success('📴 Offline — sale queued, will sync when back online', 5000);
+        onSaved(fakeSale);
+      } catch (e) {
+        posAudio.playErrorBuzz();
+        setError('Failed to queue sale offline. Please retry.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    // Online path — try API, fall back to queue on network error
     try {
-      const resp = await salesApi.create({
-        customerName: customerName || null,
-        paymentMethod: paymentMethod,
-        items: validLines.map((l) => ({ productId: Number(l.productId), quantity: Number(l.quantity) })),
-      });
+      const resp = await salesApi.create(payload);
       posAudio.playSuccessChime();
       toast.success('Sale completed successfully');
       onSaved(resp?.data?.data);
     } catch (err) {
-      posAudio.playErrorBuzz();
-      setError(err.response?.data?.message || (err.request ? 'Could not reach the server.' : 'Something went wrong'));
+      // If it's a network error (no response), queue offline automatically
+      if (!err.response && err.request) {
+        try {
+          await offlineDB.queueSale(payload);
+          notifyOfflineSyncListeners();
+          posAudio.playSuccessChime();
+          setQueuedOffline(true);
+          const fakeId = `OFFLINE-${Date.now()}`;
+          const fakeSale = {
+            id: fakeId,
+            saleNumber: fakeId,
+            saleDate: new Date().toISOString(),
+            customerName: payload.customerName,
+            paymentMethod: payload.paymentMethod,
+            paymentStatus: 'PENDING',
+            items: validLines.map((l) => {
+              const prod = products.find((p) => String(p.id) === String(l.productId));
+              return { productName: prod?.name || `#${l.productId}`, quantity: l.quantity, unitPrice: prod?.price || 0 };
+            }),
+            _offline: true,
+          };
+          toast.success('📴 Server unreachable — sale queued, will auto-sync when online', 5000);
+          onSaved(fakeSale);
+        } catch {
+          posAudio.playErrorBuzz();
+          setError('Could not reach server and offline queue failed. Check your connection.');
+        }
+      } else {
+        posAudio.playErrorBuzz();
+        setError(err.response?.data?.message || 'Something went wrong');
+      }
     } finally {
       setSaving(false);
     }
@@ -435,6 +537,17 @@ function NewSaleModal({ onClose, onSaved }) {
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
             <kbd>F2</kbd> Scan Item &nbsp;|&nbsp; <kbd>Ctrl+Enter</kbd> Complete Bill
           </span>
+          {/* Offline mode badge */}
+          {!isOnline && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.4)',
+              color: '#ca8a04', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700,
+            }}>
+              <i className="ti ti-wifi-off" style={{ fontSize: 12 }} />
+              OFFLINE MODE · Sales will auto-sync
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -449,6 +562,7 @@ function NewSaleModal({ onClose, onSaved }) {
       </div>
 
       {error && <div className="banner banner-error"><i className="ti ti-alert-circle" /><span>{error}</span></div>}
+
 
       {loadingProducts ? (
         <div className="empty-state" style={{ padding: '30px 0' }}>

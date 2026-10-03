@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { productApi } from '../api/productApi';
 import CommandPalette from '../components/CommandPalette';
+import { useOfflineStatus } from '../hooks/useOfflineStatus';
 
 const NAV = [
   { path: '/', label: 'Dashboard', icon: 'ti-layout-dashboard', exact: true },
@@ -146,6 +147,7 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [installPrompt, setInstallPrompt] = useState(null);
+  const { isOnline, pendingCount, isSyncing, lastSyncedAt, syncNow } = useOfflineStatus();
 
   useEffect(() => {
     const handler = (e) => {
@@ -375,6 +377,27 @@ export default function DashboardLayout() {
                 <kbd style={{ fontSize: 10, background: 'var(--glass-bg-strong)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--glass-border)' }}>⌘K</kbd>
               </button>
 
+              {/* Wi-Fi / Online status chip */}
+              <button
+                className="btn btn-ghost btn-icon"
+                title={isOnline ? (pendingCount > 0 ? `${pendingCount} sale(s) pending sync` : 'Online') : 'Offline — sales are being queued'}
+                onClick={isOnline && pendingCount > 0 ? syncNow : undefined}
+                style={{ position: 'relative', cursor: isOnline && pendingCount > 0 ? 'pointer' : 'default' }}
+                aria-label="Network status"
+              >
+                <i
+                  className={`ti ${!isOnline ? 'ti-wifi-off' : isSyncing ? 'ti-refresh' : 'ti-wifi'}`}
+                  style={{
+                    fontSize: 16,
+                    color: !isOnline ? '#f59e0b' : isSyncing ? '#6366f1' : '#10b981',
+                    animation: isSyncing ? 'spin 1s linear infinite' : 'none',
+                  }}
+                />
+                {pendingCount > 0 && (
+                  <span className="notification-dot" style={{ background: '#f59e0b' }}>{pendingCount}</span>
+                )}
+              </button>
+
               {/* Notification bell */}
               <button
                 className="btn btn-ghost btn-icon"
@@ -403,6 +426,75 @@ export default function DashboardLayout() {
               </button>
             </div>
           </header>
+
+          {/* Offline / Syncing Banner */}
+          {(!isOnline || pendingCount > 0) && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              padding: '7px 20px',
+              background: !isOnline
+                ? 'linear-gradient(90deg, rgba(234,179,8,0.18) 0%, rgba(234,179,8,0.08) 100%)'
+                : 'linear-gradient(90deg, rgba(99,102,241,0.12) 0%, rgba(99,102,241,0.05) 100%)',
+              borderBottom: `1px solid ${!isOnline ? 'rgba(234,179,8,0.3)' : 'rgba(99,102,241,0.2)'}`,
+              fontSize: 12,
+              flexWrap: 'wrap',
+              zIndex: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i
+                  className={`ti ${!isOnline ? 'ti-wifi-off' : isSyncing ? 'ti-refresh' : 'ti-cloud-upload'}`}
+                  style={{
+                    fontSize: 15,
+                    color: !isOnline ? '#ca8a04' : '#6366f1',
+                    animation: isSyncing ? 'spin 1s linear infinite' : 'none',
+                  }}
+                />
+                <span style={{ fontWeight: 600, color: !isOnline ? '#92400e' : '#4338ca' }}>
+                  {!isOnline
+                    ? '📴 You are offline — POS counter is running in offline mode'
+                    : isSyncing
+                    ? `⚡ Syncing ${pendingCount} queued sale${pendingCount > 1 ? 's' : ''} to server…`
+                    : `☁️ ${pendingCount} sale${pendingCount > 1 ? 's' : ''} pending sync`}
+                </span>
+                {pendingCount > 0 && (
+                  <span style={{
+                    background: !isOnline ? '#fde68a' : 'rgba(99,102,241,0.15)',
+                    color: !isOnline ? '#92400e' : '#4338ca',
+                    borderRadius: 20,
+                    padding: '1px 8px',
+                    fontWeight: 700,
+                    fontSize: 11,
+                  }}>
+                    {pendingCount} queued
+                  </span>
+                )}
+              </div>
+              {isOnline && pendingCount > 0 && !isSyncing && (
+                <button
+                  onClick={syncNow}
+                  className="btn btn-sm"
+                  style={{
+                    background: 'rgba(99,102,241,0.15)',
+                    color: '#4338ca',
+                    border: '1px solid rgba(99,102,241,0.3)',
+                    fontWeight: 600,
+                    fontSize: 11,
+                    padding: '3px 10px',
+                  }}
+                >
+                  <i className="ti ti-refresh" style={{ fontSize: 12 }} /> Sync Now
+                </button>
+              )}
+              {lastSyncedAt && pendingCount === 0 && isOnline && (
+                <span style={{ fontSize: 11, color: '#6b7280' }}>
+                  Last synced {new Date(lastSyncedAt).toLocaleTimeString()}
+                </span>
+              )}
+            </div>
+          )}
 
           <main style={{ flex: 1, overflowY: 'auto', background: 'transparent', position: 'relative' }}>
             <Breadcrumbs />
