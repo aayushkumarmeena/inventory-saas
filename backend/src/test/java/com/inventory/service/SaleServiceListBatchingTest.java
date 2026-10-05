@@ -32,6 +32,7 @@ class SaleServiceListBatchingTest {
     @Mock SaleRepository saleRepo;
     @Mock SaleItemRepository saleItemRepo;
     @Mock ProductRepository productRepo;
+    @Mock ProductBatchRepository batchRepo;
     @Mock PaymentRepository paymentRepo;
     @Mock SaleReturnRepository returnRepo;
     @Mock SaleReturnItemRepository returnItemRepo;
@@ -43,7 +44,7 @@ class SaleServiceListBatchingTest {
     @Test
     @DisplayName("a 3-row page triggers one batched query per related table, not one per row")
     void list_batchesInsteadOfPerRow() {
-        SaleService svc = new SaleService(saleRepo, saleItemRepo, productRepo, paymentRepo,
+        SaleService svc = new SaleService(saleRepo, saleItemRepo, productRepo, batchRepo, paymentRepo,
                 returnRepo, returnItemRepo, customerService, audit);
 
         List<Sale> sales = List.of(

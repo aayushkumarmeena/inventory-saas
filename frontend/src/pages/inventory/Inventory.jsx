@@ -3,10 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import { stockApi } from '../../api/stockApi';
 import { productApi } from '../../api/productApi';
 import { warehouseApi } from '../../api/warehouseApi';
+import { batchApi } from '../../api/batchApi';
 import { useToast } from '../../context/ToastContext';
 import Modal from '../../components/Modal';
 import ScanStockModal from '../../components/ScanStockModal';
 import EmptyState from '../../components/EmptyState';
+import { NewBatchModal, AdjustBatchModal } from '../../components/BatchModals';
 import { fmtDate, fmtCurrency } from '../../utils/formatters';
 
 function AdjustModal({ presetProductId, onClose, onSaved }) {
@@ -532,8 +534,9 @@ function TransferChallanModal({ transfer, onClose }) {
 export default function Inventory() {
   const [params, setParams] = useSearchParams();
   const productIdFilter = params.get('productId') || '';
+  const tabParam = params.get('tab');
 
-  const [activeTab, setActiveTab] = useState('movements'); // movements | warehouses | transfers
+  const [activeTab, setActiveTab] = useState(tabParam === 'batches' ? 'batches' : 'movements'); // movements | warehouses | transfers | batches
 
   // Tab 1 state: Stock Movements
   const [rows, setRows] = useState([]);
@@ -559,6 +562,17 @@ export default function Inventory() {
   const [totalTransferPages, setTotalTransferPages] = useState(0);
   const [showNewTransfer, setShowNewTransfer] = useState(false);
   const [viewChallan, setViewChallan] = useState(null);
+
+  // Tab 4 state: Batches & Expiry (FEFO)
+  const [batches, setBatches] = useState([]);
+  const [batchSummary, setBatchSummary] = useState(null);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [batchFilter, setBatchFilter] = useState('ALL'); // ALL | EXPIRING_30 | EXPIRING_90 | EXPIRED | ACTIVE
+  const [batchSearch, setBatchSearch] = useState('');
+  const [batchPage, setBatchPage] = useState(0);
+  const [batchTotalPages, setBatchTotalPages] = useState(0);
+  const [showNewBatch, setShowNewBatch] = useState(false);
+  const [adjustBatch, setAdjustBatch] = useState(null);
 
   const loadMovements = useCallback(() => {
     setLoading(true);
@@ -588,9 +602,31 @@ export default function Inventory() {
       .finally(() => setLoadingTransfers(false));
   }, [transferPage]);
 
+  const loadBatches = useCallback(() => {
+    setLoadingBatches(true);
+    batchApi.list({
+      page: batchPage,
+      size: 20,
+      filter: batchFilter === 'ALL' ? undefined : batchFilter,
+      query: batchSearch.trim() || undefined,
+      productId: productIdFilter || undefined,
+    })
+      .then((r) => {
+        setBatches(r.data?.data?.content || []);
+        setBatchTotalPages(r.data?.data?.totalPages || 0);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingBatches(false));
+
+    batchApi.summary()
+      .then((r) => setBatchSummary(r.data?.data || null))
+      .catch(() => {});
+  }, [batchPage, batchFilter, batchSearch, productIdFilter]);
+
   useEffect(() => {
     productApi.list({ page: 0, size: 200 }).then((r) => setAllProducts(r.data.data.content || [])).catch(() => {});
     productApi.lowStock().then((r) => setLowStock(r.data.data || [])).catch(() => {});
+    batchApi.summary().then((r) => setBatchSummary(r.data?.data || null)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -600,7 +636,8 @@ export default function Inventory() {
       loadTransfers();
       loadWarehouses();
     }
-  }, [activeTab, loadMovements, loadWarehouses, loadTransfers]);
+    if (activeTab === 'batches') loadBatches();
+  }, [activeTab, loadMovements, loadWarehouses, loadTransfers, loadBatches]);
 
   const onSaved = () => {
     setShowModal(false);
@@ -644,6 +681,12 @@ export default function Inventory() {
               <i className="ti ti-arrows-exchange" /> New Stock Transfer
             </button>
           )}
+
+          {activeTab === 'batches' && (
+            <button className="btn btn-primary" onClick={() => setShowNewBatch(true)}>
+              <i className="ti ti-plus" /> Inward New Batch
+            </button>
+          )}
         </div>
       </div>
 
@@ -666,6 +709,28 @@ export default function Inventory() {
           onClick={() => setActiveTab('transfers')}
         >
           <i className="ti ti-truck" /> Inter-Location Transfers
+        </button>
+        <button
+          className={`intel-tab ${activeTab === 'batches' ? 'active' : ''}`}
+          onClick={() => setActiveTab('batches')}
+        >
+          <i className="ti ti-calendar-time" /> Batches & Expiry (FEFO)
+          {batchSummary && (Number(batchSummary.expiringIn30Days || 0) + Number(batchSummary.expiredBatches || 0)) > 0 && (
+            <span
+              style={{
+                marginLeft: 6,
+                padding: '1px 6px',
+                borderRadius: 10,
+                fontSize: 10.5,
+                fontWeight: 700,
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#ef4444',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+              }}
+            >
+              {Number(batchSummary.expiringIn30Days || 0) + Number(batchSummary.expiredBatches || 0)}
+            </span>
+          )}
         </button>
       </div>
 
@@ -913,6 +978,213 @@ export default function Inventory() {
         </>
       )}
 
+      {/* TAB 4: BATCHES & EXPIRY (FEFO) */}
+      {activeTab === 'batches' && (
+        <div>
+          {/* Summary Metric Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
+            <div className="card" style={{ padding: '12px 16px', borderLeft: '4px solid var(--danger)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(239, 68, 68, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', fontSize: 18 }}>
+                <i className="ti ti-alert-octagon" />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>Expired Batches</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--danger)' }}>
+                  {batchSummary?.expiredBatches ?? 0}
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '12px 16px', borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(245, 158, 11, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', fontSize: 18 }}>
+                <i className="ti ti-alarm" />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>Expires in ≤ 30 Days</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#f59e0b' }}>
+                  {batchSummary?.expiringIn30Days ?? 0}
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '12px 16px', borderLeft: '4px solid #3b82f6', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6', fontSize: 18 }}>
+                <i className="ti ti-clock-hour-4" />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>Expires in ≤ 90 Days</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#3b82f6' }}>
+                  {batchSummary?.expiringIn60Days ?? 0}
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '12px 16px', borderLeft: '4px solid var(--success)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(16, 185, 129, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', fontSize: 18 }}>
+                <i className="ti ti-shield-check" />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>Active Fresh Batches</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--success)' }}>
+                  {batchSummary?.totalActiveBatches ?? 0}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Bar & Search */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[
+                { id: 'ALL', label: 'All Batches' },
+                { id: 'EXPIRING_30', label: 'Expiring ≤ 30 Days' },
+                { id: 'EXPIRING_90', label: 'Expiring ≤ 90 Days' },
+                { id: 'EXPIRED', label: 'Expired' },
+                { id: 'ACTIVE', label: 'Active Fresh' },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  type="button"
+                  className={`btn btn-sm ${batchFilter === pill.id ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: 11.5, padding: '4px 10px' }}
+                  onClick={() => { setBatchFilter(pill.id); setBatchPage(0); }}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                className="field-input"
+                style={{ width: 220, height: 32, fontSize: 12 }}
+                placeholder="Search batch # (e.g. BAT-2026)..."
+                value={batchSearch}
+                onChange={(e) => { setBatchSearch(e.target.value); setBatchPage(0); }}
+              />
+            </div>
+          </div>
+
+          {/* Batches Table */}
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Product & SKU</th>
+                  <th>Batch Number</th>
+                  <th>Mfg Date</th>
+                  <th>Expiry Date</th>
+                  <th>Shelf-Life Status</th>
+                  <th style={{ textAlign: 'right' }}>Stock (Avail / Inward)</th>
+                  <th style={{ textAlign: 'right' }}>Cost / MRP</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingBatches ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: 32 }}>
+                      <span className="spinner" />
+                    </td>
+                  </tr>
+                ) : batches.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ padding: 0 }}>
+                      <EmptyState
+                        icon="ti-calendar-off"
+                        title="No batches found"
+                        description="Record incoming product lots or click 'Inward New Batch' to start tracking expiry dates."
+                        actionLabel="Inward New Batch"
+                        onAction={() => setShowNewBatch(true)}
+                        compact
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  batches.map((b) => {
+                    const days = b.daysUntilExpiry;
+                    let shelfBadgeClass = 'badge-neutral';
+                    let shelfLabel = `${days} days left`;
+                    if (b.isExpired || days < 0) {
+                      shelfBadgeClass = 'badge-danger';
+                      shelfLabel = `Expired (${Math.abs(days)}d ago)`;
+                    } else if (days <= 30) {
+                      shelfBadgeClass = 'badge-danger';
+                      shelfLabel = `Urgent · ${days}d left`;
+                    } else if (days <= 90) {
+                      shelfBadgeClass = 'badge-warning';
+                      shelfLabel = `Expiring in ${days}d`;
+                    } else {
+                      shelfBadgeClass = 'badge-success';
+                      shelfLabel = `Fresh · ${days}d left`;
+                    }
+
+                    return (
+                      <tr key={b.id}>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{b.productName}</div>
+                          {b.productSku && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>SKU: {b.productSku}</div>}
+                        </td>
+                        <td>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700, padding: '2px 7px', background: 'var(--surface-sunken)', borderRadius: 4, border: '1px solid var(--border)' }}>
+                            {b.batchNumber}
+                          </span>
+                        </td>
+                        <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                          {b.mfgDate ? fmtDate(b.mfgDate) : '—'}
+                        </td>
+                        <td style={{ fontWeight: 600, fontSize: 12.5 }}>
+                          {fmtDate(b.expiryDate)}
+                        </td>
+                        <td>
+                          <span className={`badge ${shelfBadgeClass}`} style={{ fontSize: 11 }}>
+                            {shelfLabel}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <span style={{ fontWeight: 700, color: b.quantity <= 0 ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                            {b.quantity}
+                          </span>
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}> / {b.initialQuantity}</span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontSize: 12 }}>
+                          {b.purchasePrice ? fmtCurrency(b.purchasePrice) : '—'}
+                          {b.sellingPrice && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>MRP: {fmtCurrency(b.sellingPrice)}</div>}
+                        </td>
+                        <td>
+                          <span className={`badge ${b.status === 'ACTIVE' ? 'badge-success' : b.status === 'EXPIRED' ? 'badge-danger' : 'badge-neutral'}`}>
+                            {b.status}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '3px 8px', fontSize: 11 }}
+                            onClick={() => setAdjustBatch(b)}
+                          >
+                            <i className="ti ti-adjustments" /> Adjust / Write-off
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {!loadingBatches && batches.length > 0 && (
+            <div className="pagination">
+              <button className="btn btn-secondary btn-sm" onClick={() => setBatchPage((p) => Math.max(0, p - 1))} disabled={batchPage === 0}><i className="ti ti-chevron-left" /> Prev</button>
+              <span>Page {batchPage + 1} of {Math.max(1, batchTotalPages)}</span>
+              <button className="btn btn-secondary btn-sm" onClick={() => setBatchPage((p) => p + 1)} disabled={batchPage + 1 >= batchTotalPages}>Next <i className="ti ti-chevron-right" /></button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* MODALS */}
       {showModal && <AdjustModal presetProductId={presetProductId} onClose={() => { setShowModal(false); setPresetProductId(null); }} onSaved={onSaved} />}
       {showScan && <ScanStockModal onClose={() => setShowScan(false)} onProductFound={handleBarcodeScanned} />}
@@ -920,6 +1192,8 @@ export default function Inventory() {
       {viewStockWarehouse && <WarehouseStockModal warehouse={viewStockWarehouse} onClose={() => setViewStockWarehouse(null)} />}
       {showNewTransfer && <NewTransferModal warehouses={warehouses} onClose={() => setShowNewTransfer(false)} onSaved={() => { setShowNewTransfer(false); loadTransfers(); loadWarehouses(); }} />}
       {viewChallan && <TransferChallanModal transfer={viewChallan} onClose={() => setViewChallan(null)} />}
+      {showNewBatch && <NewBatchModal products={allProducts} onClose={() => setShowNewBatch(false)} onSaved={() => { setShowNewBatch(false); loadBatches(); }} />}
+      {adjustBatch && <AdjustBatchModal batch={adjustBatch} onClose={() => setAdjustBatch(null)} onSaved={() => { setAdjustBatch(null); loadBatches(); }} />}
     </div>
   );
 }

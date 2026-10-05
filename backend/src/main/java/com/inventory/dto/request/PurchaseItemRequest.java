@@ -19,4 +19,8 @@ public class PurchaseItemRequest {
     @NotNull
     @DecimalMin(value = "0.0", inclusive = true)
     private BigDecimal unitCost;
+
+    private String batchNumber;
+    private java.time.LocalDate mfgDate;
+    private java.time.LocalDate expiryDate;
 }

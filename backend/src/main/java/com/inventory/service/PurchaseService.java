@@ -9,6 +9,8 @@ import com.inventory.entity.Purchase;
 import com.inventory.entity.PurchaseItem;
 import com.inventory.exception.BusinessException;
 import com.inventory.exception.ResourceNotFoundException;
+import com.inventory.entity.ProductBatch;
+import com.inventory.repository.ProductBatchRepository;
 import com.inventory.repository.ProductRepository;
 import com.inventory.repository.PurchaseItemRepository;
 import com.inventory.repository.PurchaseRepository;
@@ -41,6 +43,7 @@ public class PurchaseService {
     private final PurchaseRepository purchaseRepo;
     private final PurchaseItemRepository purchaseItemRepo;
     private final ProductRepository productRepo;
+    private final ProductBatchRepository batchRepo;
     private final SupplierService supplierService;
     private final AuditService audit;
 
@@ -62,6 +65,10 @@ public class PurchaseService {
                     .quantity(itemReq.getQuantity())
                     .unitCost(itemReq.getUnitCost())
                     .lineTotal(lineTotal)
+                    .batchNumber(itemReq.getBatchNumber() != null && !itemReq.getBatchNumber().isBlank()
+                            ? itemReq.getBatchNumber().trim().toUpperCase() : null)
+                    .mfgDate(itemReq.getMfgDate())
+                    .expiryDate(itemReq.getExpiryDate())
                     .build());
             // Stock is NOT added here — only when the purchase is marked RECEIVED.
         }
@@ -123,6 +130,36 @@ public class PurchaseService {
             if (item.getProductId() == null) continue;
             productRepo.findByIdAndTenantId(item.getProductId(), tenantId).ifPresent(p -> {
                 p.setStockQuantity(p.getStockQuantity() + item.getQuantity().intValue());
+
+                // If this purchase item has a batch number and expiry date, inward it into product_batches
+                if (item.getBatchNumber() != null && !item.getBatchNumber().isBlank() && item.getExpiryDate() != null) {
+                    ProductBatch batch = batchRepo.findByTenantIdAndProductIdAndBatchNumber(tenantId, p.getId(), item.getBatchNumber())
+                            .orElse(ProductBatch.builder()
+                                    .tenantId(tenantId)
+                                    .productId(p.getId())
+                                    .batchNumber(item.getBatchNumber())
+                                    .mfgDate(item.getMfgDate())
+                                    .expiryDate(item.getExpiryDate())
+                                    .initialQuantity(0)
+                                    .quantity(0)
+                                    .purchasePrice(item.getUnitCost())
+                                    .sellingPrice(p.getPrice())
+                                    .status(item.getExpiryDate().isBefore(LocalDate.now()) ? "EXPIRED" : "ACTIVE")
+                                    .build());
+
+                    batch.setQuantity(batch.getQuantity() + item.getQuantity().intValue());
+                    batch.setInitialQuantity(batch.getInitialQuantity() + item.getQuantity().intValue());
+                    if (item.getMfgDate() != null) batch.setMfgDate(item.getMfgDate());
+                    batch.setExpiryDate(item.getExpiryDate());
+                    batch.setPurchasePrice(item.getUnitCost());
+                    if (batch.getQuantity() > 0 && !batch.isExpired()) {
+                        batch.setStatus("ACTIVE");
+                    }
+                    batchRepo.save(batch);
+
+                    p.setHasBatchTracking(true);
+                }
+
                 productRepo.save(p);
             });
         }
@@ -198,6 +235,9 @@ public class PurchaseService {
                         .quantity(i.getQuantity())
                         .unitCost(i.getUnitCost())
                         .lineTotal(i.getLineTotal())
+                        .batchNumber(i.getBatchNumber())
+                        .mfgDate(i.getMfgDate())
+                        .expiryDate(i.getExpiryDate())
                         .build()).collect(Collectors.toList()))
                 .build();
     }

@@ -234,6 +234,7 @@ export default function Receipt({ sale, onClose }) {
     <div class="item-row">
       <div>
         <div>${it.productName}</div>
+        ${it.batchNumber ? `<div style="font-size: 8.5px; color: #444;">Batch: ${it.batchNumber}${it.expiryDate ? ` · Exp: ${fmtDate(it.expiryDate)}` : ''}</div>` : ''}
         <div style="font-size: 9px; color: #333;">@${fmtCurrency(it.unitPrice)}</div>
       </div>
       <div class="center">${it.quantity}</div>
@@ -644,6 +645,7 @@ export default function Receipt({ sale, onClose }) {
             <td style="text-align: center; color: #6b7280;">${idx + 1}</td>
             <td>
               <div style="font-weight: 600; color: #111827;">${it.productName}</div>
+              ${it.batchNumber ? `<div style="font-size: 10px; color: #4338ca; font-weight: 500;">Batch: <strong>${it.batchNumber}</strong>${it.expiryDate ? ` · Exp: ${fmtDate(it.expiryDate)}` : ''}</div>` : ''}
               ${it.productId ? `<div style="font-size: 10px; color: #6b7280; font-family: monospace;">SKU: #${it.productId}</div>` : ''}
             </td>
             <td style="text-align: center; font-weight: 600;">${it.quantity}</td>
@@ -754,7 +756,7 @@ export default function Receipt({ sale, onClose }) {
     const phoneParam = cleanPhone.length === 10 ? '91' + cleanPhone : cleanPhone;
 
     const itemsSummary = (sale.items || [])
-      .map((it, idx) => `${idx + 1}. *${it.productName}*\n   ${it.quantity} x ₹${Number(it.unitPrice).toFixed(2)} = *₹${(Number(it.quantity) * Number(it.unitPrice)).toFixed(2)}*`)
+      .map((it, idx) => `${idx + 1}. *${it.productName}*${it.batchNumber ? ` (Batch: ${it.batchNumber}${it.expiryDate ? `, Exp: ${fmtDate(it.expiryDate)}` : ''})` : ''}\n   ${it.quantity} x ₹${Number(it.unitPrice).toFixed(2)} = *₹${(Number(it.quantity) * Number(it.unitPrice)).toFixed(2)}*`)
       .join('\n');
 
     const message = `🧾 *TAX INVOICE / BILL*
@@ -1160,6 +1162,11 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
                     <td style={{ padding: '8px 10px', textAlign: 'center', border: '1px solid #e5e7eb', color: '#6b7280' }}>{idx + 1}</td>
                     <td style={{ padding: '8px 10px', border: '1px solid #e5e7eb' }}>
                       <div style={{ fontWeight: 600, color: '#111827' }}>{it.productName}</div>
+                      {it.batchNumber && (
+                        <div style={{ fontSize: 10, color: '#4338ca', fontWeight: 500 }}>
+                          Batch: <strong>{it.batchNumber}</strong>{it.expiryDate ? ` · Exp: ${fmtDate(it.expiryDate)}` : ''}
+                        </div>
+                      )}
                       {it.productId && <div style={{ fontSize: 10, color: '#6b7280', fontFamily: 'monospace' }}>SKU: #{it.productId}</div>}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, border: '1px solid #e5e7eb' }}>{it.quantity}</td>
@@ -1319,6 +1326,11 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
               <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', fontSize: 10, padding: '3px 0' }}>
                 <div>
                   <div>{it.productName}</div>
+                  {it.batchNumber && (
+                    <div style={{ fontSize: 8, color: '#444' }}>
+                      B: {it.batchNumber}{it.expiryDate ? ` (${fmtDate(it.expiryDate)})` : ''}
+                    </div>
+                  )}
                   <div style={{ fontSize: 8.5, color: '#555' }}>@{fmtCurrency(it.unitPrice)}</div>
                 </div>
                 <div style={{ textAlign: 'center' }}>{it.quantity}</div>

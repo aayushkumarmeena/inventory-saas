@@ -18,4 +18,7 @@ public class SaleItemResponse {
     private BigDecimal quantity;
     private BigDecimal unitPrice;
     private BigDecimal lineTotal;
+    private Long batchId;
+    private String batchNumber;
+    private java.time.LocalDate expiryDate;
 }

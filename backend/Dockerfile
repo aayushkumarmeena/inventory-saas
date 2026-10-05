@@ -10,7 +10,7 @@ RUN mvn -B -q dependency:go-offline
 # Now copy sources and build the jar (tests are skipped here; run them
 # separately in CI with `mvn test`).
 COPY src ./src
-RUN mvn -B -q clean package -DskipTests
+RUN mvn -B clean package -DskipTests
 
 # ---------- Runtime stage ----------
 FROM eclipse-temurin:21-jre-alpine AS runtime

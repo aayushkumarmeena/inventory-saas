@@ -80,6 +80,10 @@ public class Product {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Column(name = "has_batch_tracking")
+    @Builder.Default
+    private Boolean hasBatchTracking = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

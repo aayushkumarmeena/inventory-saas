@@ -35,6 +35,7 @@ public class SaleService {
     private final SaleRepository saleRepo;
     private final SaleItemRepository saleItemRepo;
     private final ProductRepository productRepo;
+    private final ProductBatchRepository batchRepo;
     private final PaymentRepository paymentRepo;
     private final SaleReturnRepository returnRepo;
     private final SaleReturnItemRepository returnItemRepo;
@@ -57,12 +58,55 @@ public class SaleService {
             BigDecimal lineTotal = product.getPrice().multiply(itemReq.getQuantity());
             total = total.add(lineTotal);
 
+            // Batch allocation — Explicit selection or FEFO (First Expire, First Out)
+            Long batchId = null;
+            String batchNumber = null;
+            LocalDate expiryDate = null;
+
+            if (itemReq.getBatchId() != null) {
+                // 1. Explicit cashier batch selection
+                ProductBatch batch = batchRepo.findByIdAndTenantId(itemReq.getBatchId(), tenantId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Batch not found: " + itemReq.getBatchId()));
+                if (batch.getQuantity() < itemReq.getQuantity().intValue()) {
+                    throw new BusinessException("Not enough stock in batch '" + batch.getBatchNumber() + "' (available: " + batch.getQuantity() + ")");
+                }
+                batch.setQuantity(batch.getQuantity() - itemReq.getQuantity().intValue());
+                if (batch.getQuantity() == 0) {
+                    batch.setStatus("DEPLETED");
+                }
+                batchRepo.save(batch);
+                batchId = batch.getId();
+                batchNumber = batch.getBatchNumber();
+                expiryDate = batch.getExpiryDate();
+            } else {
+                // 2. FEFO auto-allocation: pick earliest expiring active batch with stock
+                List<ProductBatch> fefoBatches = batchRepo
+                        .findByTenantIdAndProductIdAndQuantityGreaterThanAndStatusOrderByExpiryDateAsc(
+                                tenantId, product.getId(), 0, "ACTIVE");
+
+                if (!fefoBatches.isEmpty()) {
+                    ProductBatch fefoBatch = fefoBatches.get(0);
+                    int qtyDeducted = Math.min(fefoBatch.getQuantity(), itemReq.getQuantity().intValue());
+                    fefoBatch.setQuantity(fefoBatch.getQuantity() - qtyDeducted);
+                    if (fefoBatch.getQuantity() == 0) {
+                        fefoBatch.setStatus("DEPLETED");
+                    }
+                    batchRepo.save(fefoBatch);
+                    batchId = fefoBatch.getId();
+                    batchNumber = fefoBatch.getBatchNumber();
+                    expiryDate = fefoBatch.getExpiryDate();
+                }
+            }
+
             lineItems.add(SaleItem.builder()
                     .productId(product.getId())
                     .productName(product.getName())
                     .quantity(itemReq.getQuantity())
                     .unitPrice(product.getPrice())
                     .lineTotal(lineTotal)
+                    .batchId(batchId)
+                    .batchNumber(batchNumber)
+                    .expiryDate(expiryDate)
                     .build());
 
             product.setStockQuantity(product.getStockQuantity() - itemReq.getQuantity().intValue());
@@ -244,6 +288,17 @@ public class SaleService {
                     productRepo.save(p);
                 });
             }
+
+            // Restore batch quantity if item was allocated from a batch
+            if (original.getBatchId() != null) {
+                batchRepo.findByIdAndTenantId(original.getBatchId(), tenantId).ifPresent(b -> {
+                    b.setQuantity(b.getQuantity() + itemReq.getQuantity().intValue());
+                    if ("DEPLETED".equals(b.getStatus())) {
+                        b.setStatus(b.isExpired() ? "EXPIRED" : "ACTIVE");
+                    }
+                    batchRepo.save(b);
+                });
+            }
         }
 
         SaleReturn saleReturn = returnRepo.save(SaleReturn.builder()
@@ -316,6 +371,9 @@ public class SaleService {
                         .quantity(i.getQuantity())
                         .unitPrice(i.getUnitPrice())
                         .lineTotal(i.getLineTotal())
+                        .batchId(i.getBatchId())
+                        .batchNumber(i.getBatchNumber())
+                        .expiryDate(i.getExpiryDate())
                         .build()).collect(Collectors.toList()))
                 .payments(payments.stream().map(p -> PaymentResponse.builder()
                         .id(p.getId())

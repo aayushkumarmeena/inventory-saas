@@ -18,4 +18,7 @@ public class PurchaseItemResponse {
     private BigDecimal quantity;
     private BigDecimal unitCost;
     private BigDecimal lineTotal;
+    private String batchNumber;
+    private java.time.LocalDate mfgDate;
+    private java.time.LocalDate expiryDate;
 }

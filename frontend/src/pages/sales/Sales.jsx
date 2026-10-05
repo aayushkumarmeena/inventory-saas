@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { salesApi } from '../../api/salesApi';
 import { productApi } from '../../api/productApi';
 import { customerApi } from '../../api/customerApi';
+import { batchApi } from '../../api/batchApi';
 import { fmtCurrency, fmtDate, downloadBlob } from '../../utils/formatters';
 import { decodeProductQr } from '../../utils/qr';
 import { posAudio } from '../../utils/audio';
@@ -289,7 +290,24 @@ function NewSaleModal({ onClose, onSaved }) {
   const netPayable = Math.max(0, subtotal - discountAmount);
   const changeToReturn = Number(cashReceived || 0) - netPayable;
 
-  const updateLine = (i, key, val) => setLines((p) => p.map((l, idx) => (idx === i ? { ...l, [key]: val } : l)));
+  const [batchesByProduct, setBatchesByProduct] = useState({});
+
+  const fetchBatchesForProduct = useCallback((pid) => {
+    if (!pid || batchesByProduct[pid]) return;
+    batchApi.getFefoBatches(pid)
+      .then((r) => {
+        const bList = r.data?.data || [];
+        setBatchesByProduct((prev) => ({ ...prev, [pid]: bList }));
+      })
+      .catch(() => {});
+  }, [batchesByProduct]);
+
+  const updateLine = (i, key, val) => {
+    if (key === 'productId' && val) {
+      fetchBatchesForProduct(val);
+    }
+    setLines((p) => p.map((l, idx) => (idx === i ? { ...l, [key]: val } : l)));
+  };
   const addLine = () => setLines((p) => [...p, { productId: '', quantity: 1 }]);
   const removeLine = (i) => setLines((p) => p.filter((_, idx) => idx !== i));
 
@@ -302,6 +320,7 @@ function NewSaleModal({ onClose, onSaved }) {
       return;
     }
     posAudio.playScanBeep();
+    fetchBatchesForProduct(product.id);
 
     setLines((prev) => {
       const existingIdx = prev.findIndex((l) => String(l.productId) === String(product.id));
@@ -450,7 +469,11 @@ function NewSaleModal({ onClose, onSaved }) {
     const payload = {
       customerName: customerName || null,
       paymentMethod: paymentMethod,
-      items: validLines.map((l) => ({ productId: Number(l.productId), quantity: Number(l.quantity) })),
+      items: validLines.map((l) => ({
+        productId: Number(l.productId),
+        quantity: Number(l.quantity),
+        batchId: l.batchId ? Number(l.batchId) : undefined,
+      })),
     };
 
     // If offline, queue immediately without even trying the API
@@ -471,7 +494,16 @@ function NewSaleModal({ onClose, onSaved }) {
           paymentStatus: 'PENDING',
           items: validLines.map((l) => {
             const prod = products.find((p) => String(p.id) === String(l.productId));
-            return { productName: prod?.name || `#${l.productId}`, quantity: l.quantity, unitPrice: prod?.price || 0 };
+            const pBatches = batchesByProduct[l.productId] || [];
+            const chosen = l.batchId ? pBatches.find((b) => String(b.id) === String(l.batchId)) : pBatches[0];
+            return {
+              productName: prod?.name || `#${l.productId}`,
+              quantity: l.quantity,
+              unitPrice: prod?.price || 0,
+              batchId: chosen?.id,
+              batchNumber: chosen?.batchNumber,
+              expiryDate: chosen?.expiryDate,
+            };
           }),
           _offline: true,
         };
@@ -510,7 +542,16 @@ function NewSaleModal({ onClose, onSaved }) {
             paymentStatus: 'PENDING',
             items: validLines.map((l) => {
               const prod = products.find((p) => String(p.id) === String(l.productId));
-              return { productName: prod?.name || `#${l.productId}`, quantity: l.quantity, unitPrice: prod?.price || 0 };
+              const pBatches = batchesByProduct[l.productId] || [];
+              const chosen = l.batchId ? pBatches.find((b) => String(b.id) === String(l.batchId)) : pBatches[0];
+              return {
+                productName: prod?.name || `#${l.productId}`,
+                quantity: l.quantity,
+                unitPrice: prod?.price || 0,
+                batchId: chosen?.id,
+                batchNumber: chosen?.batchNumber,
+                expiryDate: chosen?.expiryDate,
+              };
             }),
             _offline: true,
           };
@@ -644,27 +685,52 @@ function NewSaleModal({ onClose, onSaved }) {
           <div style={{ maxHeight: '28vh', overflowY: 'auto', paddingRight: 4, marginBottom: 8 }}>
             {lines.map((line, i) => {
               const p = productById(line.productId);
+              const pBatches = batchesByProduct[line.productId] || [];
               return (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 32px', gap: 8, marginBottom: 8, alignItems: 'center' }} className="item-row-grid">
-                  <select className="field-input" value={line.productId} onChange={(e) => updateLine(i, 'productId', e.target.value)}>
-                    <option value="">Select product…</option>
-                    {products.map((prod) => (
-                      <option key={prod.id} value={prod.id} disabled={prod.stockQuantity <= 0}>
-                        {prod.name} · {fmtCurrency(prod.price)} {prod.stockQuantity <= 0 ? '(Out of stock)' : `(${prod.stockQuantity} in stock)`}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="field-input"
-                    type="number"
-                    min="1"
-                    max={p?.stockQuantity || undefined}
-                    value={line.quantity}
-                    onChange={(e) => updateLine(i, 'quantity', e.target.value)}
-                  />
-                  <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeLine(i)} disabled={lines.length === 1} aria-label="Remove line">
-                    <i className="ti ti-trash" style={{ fontSize: 14 }} />
-                  </button>
+                <div key={i} style={{ marginBottom: 8, padding: '6px 8px', background: 'var(--surface-sunken)', borderRadius: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 32px', gap: 8, alignItems: 'center' }} className="item-row-grid">
+                    <select className="field-input" value={line.productId} onChange={(e) => updateLine(i, 'productId', e.target.value)}>
+                      <option value="">Select product…</option>
+                      {products.map((prod) => (
+                        <option key={prod.id} value={prod.id} disabled={prod.stockQuantity <= 0}>
+                          {prod.name} · {fmtCurrency(prod.price)} {prod.stockQuantity <= 0 ? '(Out of stock)' : `(${prod.stockQuantity} in stock)`}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="field-input"
+                      type="number"
+                      min="1"
+                      max={p?.stockQuantity || undefined}
+                      value={line.quantity}
+                      onChange={(e) => updateLine(i, 'quantity', e.target.value)}
+                    />
+                    <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeLine(i)} disabled={lines.length === 1} aria-label="Remove line">
+                      <i className="ti ti-trash" style={{ fontSize: 14 }} />
+                    </button>
+                  </div>
+                  {pBatches.length > 0 && (
+                    <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                      <span style={{ color: 'var(--brand)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <i className="ti ti-bolt" /> FEFO:
+                      </span>
+                      <select
+                        className="field-input"
+                        style={{ height: 24, fontSize: 10.5, padding: '0 6px', maxWidth: 280 }}
+                        value={line.batchId || ''}
+                        onChange={(e) => updateLine(i, 'batchId', e.target.value || null)}
+                      >
+                        <option value="">
+                          Auto (Earliest: #{pBatches[0].batchNumber} · Exp {fmtDate(pBatches[0].expiryDate)})
+                        </option>
+                        {pBatches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            #{b.batchNumber} · {b.quantity} left · Exp: {fmtDate(b.expiryDate)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               );
             })}

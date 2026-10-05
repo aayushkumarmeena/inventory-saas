@@ -15,4 +15,6 @@ public class SaleItemRequest {
     @NotNull
     @DecimalMin(value = "0.01")
     private BigDecimal quantity;
+
+    private Long batchId;
 }

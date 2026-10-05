@@ -215,7 +215,14 @@ function NewPurchaseModal({ onClose, onSaved, prefilledProductId, autoFillLowSto
     try {
       await purchaseApi.create({
         supplierName: supplierName || null,
-        items: validLines.map((l) => ({ productId: Number(l.productId), quantity: Number(l.quantity), unitCost: Number(l.unitCost) })),
+        items: validLines.map((l) => ({
+          productId: Number(l.productId),
+          quantity: Number(l.quantity),
+          unitCost: Number(l.unitCost),
+          batchNumber: l.batchNumber ? l.batchNumber.trim().toUpperCase() : undefined,
+          mfgDate: l.mfgDate || undefined,
+          expiryDate: l.expiryDate || undefined,
+        })),
       });
       toast.success('Purchase recorded, stock updated');
       onSaved();
@@ -266,20 +273,47 @@ function NewPurchaseModal({ onClose, onSaved, prefilledProductId, autoFillLowSto
 
           <label className="field-label">Items to Restock</label>
           {lines.map((line, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.6fr 0.7fr 0.9fr 32px', gap: 8, marginBottom: 8 }} className="item-row-grid">
-              <select className="field-input" value={line.productId} onChange={(e) => updateLine(i, 'productId', e.target.value)}>
-                <option value="">Select product…</option>
-                {products.map((prod) => (
-                  <option key={prod.id} value={prod.id}>
-                    {prod.name} ({prod.stockQuantity} in stock, min: {prod.reorderLevel})
-                  </option>
-                ))}
-              </select>
-              <input className="field-input" type="number" min="1" placeholder="Qty" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)} />
-              <input className="field-input" type="number" min="0" step="0.01" placeholder="Unit cost" value={line.unitCost} onChange={(e) => updateLine(i, 'unitCost', e.target.value)} />
-              <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeLine(i)} disabled={lines.length === 1} aria-label="Remove line">
-                <i className="ti ti-trash" style={{ fontSize: 14 }} />
-              </button>
+            <div key={i} style={{ marginBottom: 10, padding: '8px', background: 'var(--surface-sunken)', borderRadius: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 0.7fr 0.9fr 32px', gap: 8 }} className="item-row-grid">
+                <select className="field-input" value={line.productId} onChange={(e) => updateLine(i, 'productId', e.target.value)}>
+                  <option value="">Select product…</option>
+                  {products.map((prod) => (
+                    <option key={prod.id} value={prod.id}>
+                      {prod.name} ({prod.stockQuantity} in stock, min: {prod.reorderLevel})
+                    </option>
+                  ))}
+                </select>
+                <input className="field-input" type="number" min="1" placeholder="Qty" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)} />
+                <input className="field-input" type="number" min="0" step="0.01" placeholder="Unit cost" value={line.unitCost} onChange={(e) => updateLine(i, 'unitCost', e.target.value)} />
+                <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeLine(i)} disabled={lines.length === 1} aria-label="Remove line">
+                  <i className="ti ti-trash" style={{ fontSize: 14 }} />
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 8, marginTop: 6 }}>
+                <input
+                  className="field-input"
+                  style={{ height: 26, fontSize: 11 }}
+                  placeholder="Batch # (optional, e.g. LOT-2026)"
+                  value={line.batchNumber || ''}
+                  onChange={(e) => updateLine(i, 'batchNumber', e.target.value)}
+                />
+                <input
+                  type="date"
+                  className="field-input"
+                  style={{ height: 26, fontSize: 11 }}
+                  title="Mfg Date (optional)"
+                  value={line.mfgDate || ''}
+                  onChange={(e) => updateLine(i, 'mfgDate', e.target.value)}
+                />
+                <input
+                  type="date"
+                  className="field-input"
+                  style={{ height: 26, fontSize: 11 }}
+                  title="Expiry Date"
+                  value={line.expiryDate || ''}
+                  onChange={(e) => updateLine(i, 'expiryDate', e.target.value)}
+                />
+              </div>
             </div>
           ))}
           <button type="button" className="btn btn-secondary btn-sm" onClick={addLine} style={{ marginBottom: 16 }}>

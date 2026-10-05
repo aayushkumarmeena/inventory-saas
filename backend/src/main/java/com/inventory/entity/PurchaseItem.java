@@ -34,4 +34,13 @@ public class PurchaseItem {
 
     @Column(name = "line_total", nullable = false, precision = 14, scale = 2)
     private BigDecimal lineTotal;
+
+    @Column(name = "batch_number")
+    private String batchNumber;
+
+    @Column(name = "mfg_date")
+    private java.time.LocalDate mfgDate;
+
+    @Column(name = "expiry_date")
+    private java.time.LocalDate expiryDate;
 }
