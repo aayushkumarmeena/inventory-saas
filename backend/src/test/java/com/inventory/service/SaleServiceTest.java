@@ -43,6 +43,7 @@ class SaleServiceTest {
     @Mock SaleRepository saleRepo;
     @Mock SaleItemRepository saleItemRepo;
     @Mock ProductRepository productRepo;
+    @Mock ProductBatchRepository batchRepo;
     @Mock PaymentRepository paymentRepo;
     @Mock SaleReturnRepository returnRepo;
     @Mock SaleReturnItemRepository returnItemRepo;
