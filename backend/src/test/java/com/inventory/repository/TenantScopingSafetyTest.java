@@ -40,6 +40,7 @@ class TenantScopingSafetyTest {
             HsnSacCodeRepository.class,
             PaymentRepository.class,
             ProductRepository.class,
+            ProductBatchRepository.class,
             PurchaseRepository.class,
             PurchaseItemRepository.class,
             SaleRepository.class,

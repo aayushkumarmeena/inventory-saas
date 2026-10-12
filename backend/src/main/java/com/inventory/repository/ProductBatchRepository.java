@@ -23,11 +23,15 @@ public interface ProductBatchRepository extends JpaRepository<ProductBatch, Long
     List<ProductBatch> findByTenantIdAndProductIdAndQuantityGreaterThanAndStatusOrderByExpiryDateAsc(
             Long tenantId, Long productId, Integer quantity, String status);
 
-    @Query("SELECT b FROM ProductBatch b WHERE b.tenantId = :tenantId " +
-           "AND (:productId IS NULL OR b.productId = :productId) " +
-           "AND (:status IS NULL OR b.status = :status) " +
-           "AND (:query IS NULL OR LOWER(b.batchNumber) LIKE LOWER(CONCAT('%', :query, '%'))) " +
-           "ORDER BY b.expiryDate ASC")
+    @Query(value = "SELECT b FROM ProductBatch b WHERE b.tenantId = :tenantId " +
+           "AND (cast(:productId as Long) IS NULL OR b.productId = :productId) " +
+           "AND (cast(:status as String) IS NULL OR b.status = :status) " +
+           "AND (cast(:query as String) IS NULL OR LOWER(b.batchNumber) LIKE LOWER(CONCAT('%', cast(:query as String), '%'))) " +
+           "ORDER BY b.expiryDate ASC",
+           countQuery = "SELECT COUNT(b) FROM ProductBatch b WHERE b.tenantId = :tenantId " +
+           "AND (cast(:productId as Long) IS NULL OR b.productId = :productId) " +
+           "AND (cast(:status as String) IS NULL OR b.status = :status) " +
+           "AND (cast(:query as String) IS NULL OR LOWER(b.batchNumber) LIKE LOWER(CONCAT('%', cast(:query as String), '%')))")
     Page<ProductBatch> searchBatches(
             @Param("tenantId") Long tenantId,
             @Param("productId") Long productId,
