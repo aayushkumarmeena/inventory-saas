@@ -35,40 +35,41 @@ public class BatchService {
 
     @Transactional(readOnly = true)
     public Page<ProductBatchResponse> list(Long tenantId, Long productId, String filter, String query, Pageable pageable) {
-        // If filter is specific expiry horizon, we can handle or query
-        String statusFilter = null;
-        if ("ACTIVE".equalsIgnoreCase(filter)) statusFilter = "ACTIVE";
-        else if ("DEPLETED".equalsIgnoreCase(filter)) statusFilter = "DEPLETED";
-        else if ("EXPIRED".equalsIgnoreCase(filter)) statusFilter = "EXPIRED";
+        Page<ProductBatch> page;
+        if (productId != null) {
+            page = batchRepo.findByTenantIdAndProductIdOrderByExpiryDateAsc(tenantId, productId, pageable);
+        } else {
+            page = batchRepo.findByTenantIdOrderByExpiryDateAsc(tenantId, pageable);
+        }
 
-        Page<ProductBatch> page = batchRepo.searchBatches(tenantId, productId, statusFilter, query, pageable);
-
-        LocalDate now = LocalDate.now();
         List<ProductBatch> content = page.getContent();
 
-        // Secondary filtering in-memory for 30d/60d/90d horizon if selected
-        if ("EXPIRING_30".equalsIgnoreCase(filter)) {
-            content = content.stream()
-                    .filter(b -> b.getQuantity() > 0 && !b.isExpired() && b.getDaysUntilExpiry() <= 30)
-                    .collect(Collectors.toList());
-        } else if ("EXPIRING_60".equalsIgnoreCase(filter)) {
-            content = content.stream()
-                    .filter(b -> b.getQuantity() > 0 && !b.isExpired() && b.getDaysUntilExpiry() <= 60)
-                    .collect(Collectors.toList());
-        } else if ("EXPIRING_90".equalsIgnoreCase(filter)) {
-            content = content.stream()
-                    .filter(b -> b.getQuantity() > 0 && !b.isExpired() && b.getDaysUntilExpiry() <= 90)
-                    .collect(Collectors.toList());
+        // Status & expiry horizon filtering
+        if ("ACTIVE".equalsIgnoreCase(filter)) {
+            content = content.stream().filter(b -> "ACTIVE".equalsIgnoreCase(b.getStatus()) && b.getQuantity() > 0).collect(Collectors.toList());
+        } else if ("DEPLETED".equalsIgnoreCase(filter)) {
+            content = content.stream().filter(b -> "DEPLETED".equalsIgnoreCase(b.getStatus()) || b.getQuantity() == 0).collect(Collectors.toList());
         } else if ("EXPIRED".equalsIgnoreCase(filter)) {
-            content = content.stream()
-                    .filter(b -> b.getQuantity() > 0 && b.isExpired())
-                    .collect(Collectors.toList());
+            content = content.stream().filter(b -> b.isExpired() || "EXPIRED".equalsIgnoreCase(b.getStatus())).collect(Collectors.toList());
+        } else if ("EXPIRING_30".equalsIgnoreCase(filter)) {
+            content = content.stream().filter(b -> b.getQuantity() > 0 && !b.isExpired() && b.getDaysUntilExpiry() <= 30).collect(Collectors.toList());
+        } else if ("EXPIRING_60".equalsIgnoreCase(filter)) {
+            content = content.stream().filter(b -> b.getQuantity() > 0 && !b.isExpired() && b.getDaysUntilExpiry() <= 60).collect(Collectors.toList());
+        } else if ("EXPIRING_90".equalsIgnoreCase(filter)) {
+            content = content.stream().filter(b -> b.getQuantity() > 0 && !b.isExpired() && b.getDaysUntilExpiry() <= 90).collect(Collectors.toList());
+        }
+
+        // Search query filtering
+        if (query != null && !query.isBlank()) {
+            String q = query.trim().toLowerCase();
+            content = content.stream().filter(b -> b.getBatchNumber() != null && b.getBatchNumber().toLowerCase().contains(q)).collect(Collectors.toList());
         }
 
         // Batch fetch products to avoid N+1
         List<Long> productIds = content.stream().map(ProductBatch::getProductId).distinct().collect(Collectors.toList());
-        Map<Long, Product> productMap = productRepo.findAllById(productIds).stream()
-                .collect(Collectors.toMap(Product::getId, p -> p));
+        Map<Long, Product> productMap = productIds.isEmpty() ? Map.of() :
+                productRepo.findAllById(productIds).stream()
+                        .collect(Collectors.toMap(Product::getId, p -> p, (p1, p2) -> p1));
 
         List<ProductBatchResponse> responses = content.stream()
                 .map(b -> toResponse(b, productMap.get(b.getProductId())))

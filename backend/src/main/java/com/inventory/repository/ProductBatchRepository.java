@@ -17,9 +17,12 @@ public interface ProductBatchRepository extends JpaRepository<ProductBatch, Long
 
     Optional<ProductBatch> findByTenantIdAndProductIdAndBatchNumber(Long tenantId, Long productId, String batchNumber);
 
+    Page<ProductBatch> findByTenantIdOrderByExpiryDateAsc(Long tenantId, Pageable pageable);
+
+    Page<ProductBatch> findByTenantIdAndProductIdOrderByExpiryDateAsc(Long tenantId, Long productId, Pageable pageable);
+
     List<ProductBatch> findByTenantIdAndProductIdOrderByExpiryDateAsc(Long tenantId, Long productId);
 
-    // FEFO: fetch active batches with available stock sorted by earliest expiry date first
     List<ProductBatch> findByTenantIdAndProductIdAndQuantityGreaterThanAndStatusOrderByExpiryDateAsc(
             Long tenantId, Long productId, Integer quantity, String status);
 
