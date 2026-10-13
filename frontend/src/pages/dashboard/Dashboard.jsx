@@ -126,28 +126,57 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Low stock critical alert banner */}
+      {/* Low stock critical alert banner with product breakdown */}
       {!loading && lowStockItems.length > 0 && (
         <div
-          className="banner"
+          className="card"
           style={{
-            background: 'var(--danger-bg)',
-            color: 'var(--danger-text)',
-            cursor: 'pointer',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            padding: '14px 18px',
+            marginBottom: 20,
+            borderRadius: 14,
           }}
-          onClick={() => nav('/inventory')}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <i className="ti ti-alert-triangle" style={{ fontSize: 18 }} />
-            <span>
-              <strong>{lowStockItems.length} product{lowStockItems.length === 1 ? '' : 's'}</strong> below reorder point! Restock now to prevent stockouts.
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <i className="ti ti-alert-triangle" style={{ fontSize: 20, color: '#ef4444' }} />
+              <strong style={{ fontSize: 13.5, color: '#ef4444' }}>
+                {lowStockItems.length} Products Running Low on Stock:
+              </strong>
+            </div>
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: 11.5, padding: '4px 10px', borderColor: 'rgba(239,68,68,0.3)' }}
+              onClick={() => nav('/products?filter=low-stock')}
+            >
+              Manage in Products <i className="ti ti-arrow-right" style={{ fontSize: 11 }} />
+            </button>
           </div>
-          <span style={{ fontSize: 12, fontWeight: 600, textDecoration: 'underline' }}>View Stock →</span>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {lowStockItems.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => nav('/inventory')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 12px',
+                  background: 'var(--surface-1)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  transition: 'transform 0.15s, border-color 0.15s',
+                }}
+              >
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.name}</span>
+                <span style={{ color: '#ef4444', fontWeight: 700 }}>{p.stockQuantity} in stock</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(reorder threshold: {p.reorderPoint || p.reorderLevel || 10})</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

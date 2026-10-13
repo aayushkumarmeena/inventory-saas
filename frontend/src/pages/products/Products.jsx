@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { productApi } from '../../api/productApi';
 import { fmtCurrency, downloadBlob } from '../../utils/formatters';
 import { useToast } from '../../context/ToastContext';
@@ -203,6 +203,15 @@ export default function Products() {
     load();
   }, [load]);
 
+  const [searchParams] = useSearchParams();
+  const [onlyLowStock, setOnlyLowStock] = useState(() => searchParams.get('filter') === 'low-stock');
+
+  useEffect(() => {
+    if (searchParams.get('filter') === 'low-stock') {
+      setOnlyLowStock(true);
+    }
+  }, [searchParams]);
+
   const categories = useMemo(() => {
     const set = new Set();
     products.forEach((p) => {
@@ -211,8 +220,15 @@ export default function Products() {
     return Array.from(set);
   }, [products]);
 
+  const lowStockCount = useMemo(() => {
+    return products.filter((p) => p.lowStock || Number(p.stockQuantity) <= Number(p.reorderPoint || p.reorderLevel || 10)).length;
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     let list = [...products];
+    if (onlyLowStock) {
+      list = list.filter((p) => p.lowStock || Number(p.stockQuantity) <= Number(p.reorderPoint || p.reorderLevel || 10));
+    }
     if (categoryFilter) {
       list = list.filter((p) => p.categoryName === categoryFilter);
     }
@@ -230,7 +246,7 @@ export default function Products() {
       list.sort((a, b) => Number(b.stockQuantity) - Number(a.stockQuantity));
     }
     return list;
-  }, [products, categoryFilter, sortBy]);
+  }, [products, onlyLowStock, categoryFilter, sortBy]);
 
   const exportCsv = async () => {
     setExporting(true);
@@ -307,6 +323,16 @@ export default function Products() {
               placeholder="Search by name, SKU or barcode…"
             />
           </div>
+          <button
+            type="button"
+            className={`btn btn-sm ${onlyLowStock ? 'btn-danger' : 'btn-secondary'}`}
+            style={{ fontSize: 12, padding: '7px 12px' }}
+            onClick={() => setOnlyLowStock((v) => !v)}
+            title="Filter products below their reorder threshold"
+          >
+            <i className="ti ti-alert-triangle" style={{ color: onlyLowStock ? '#fff' : '#ef4444' }} />
+            Low Stock {lowStockCount > 0 ? `(${lowStockCount})` : ''}
+          </button>
 
           {categories.length > 0 && (
             <select

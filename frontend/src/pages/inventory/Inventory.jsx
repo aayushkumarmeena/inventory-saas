@@ -776,20 +776,36 @@ export default function Inventory() {
       {activeTab === 'movements' && (
         <>
           {lowStock.length > 0 && (
-            <div className="banner banner-error" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <i className="ti ti-alert-triangle" />
-                <span><strong>{lowStock.length} product(s)</strong> are running low on stock.</span>
+            <div className="banner banner-error" style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <i className="ti ti-alert-triangle" style={{ fontSize: 18 }} />
+                  <span><strong>{lowStock.length} Products</strong> running low on stock:</span>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Click product to view its movements</span>
               </div>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  const first = lowStock[0];
-                  setParams({ productId: String(first.id) });
-                }}
-              >
-                Filter low stock
-              </button>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {lowStock.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="btn btn-sm"
+                    style={{
+                      background: productIdFilter === String(p.id) ? '#ef4444' : 'rgba(239, 68, 68, 0.15)',
+                      color: productIdFilter === String(p.id) ? '#fff' : '#fca5a5',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      fontSize: 11.5,
+                      padding: '4px 10px',
+                    }}
+                    onClick={() => {
+                      setParams({ productId: String(p.id) });
+                      setPage(0);
+                    }}
+                  >
+                    {p.name} — <strong>{p.stockQuantity} left</strong> (min {p.reorderPoint || p.reorderLevel || 10})
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
