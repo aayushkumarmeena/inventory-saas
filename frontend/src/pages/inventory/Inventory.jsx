@@ -614,9 +614,47 @@ export default function Inventory() {
       .then((r) => {
         setBatches(r.data?.data?.content || []);
         setBatchTotalPages(r.data?.data?.totalPages || 0);
+        setLoadingBatches(false);
       })
-      .catch(() => {})
-      .finally(() => setLoadingBatches(false));
+      .catch(() => {
+        // Fallback to per-product FEFO aggregation if needed
+        productApi.list({ page: 0, size: 200 }).then((prodRes) => {
+          const products = prodRes.data?.data?.content || [];
+          const targetProducts = productIdFilter
+            ? products.filter((p) => p.id === Number(productIdFilter))
+            : products;
+
+          Promise.allSettled(
+            targetProducts.map((p) => batchApi.getFefoBatches(p.id))
+          ).then((results) => {
+            let all = [];
+            results.forEach((r) => {
+              if (r.status === 'fulfilled') {
+                all = all.concat(r.value?.data?.data || []);
+              }
+            });
+            all.sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+            const filter = batchFilter;
+            if (filter === 'EXPIRING_30') {
+              all = all.filter((b) => b.quantity > 0 && !b.isExpired && b.daysUntilExpiry <= 30);
+            } else if (filter === 'EXPIRING_90') {
+              all = all.filter((b) => b.quantity > 0 && !b.isExpired && b.daysUntilExpiry <= 90);
+            } else if (filter === 'EXPIRED') {
+              all = all.filter((b) => b.isExpired || b.status === 'EXPIRED');
+            } else if (filter === 'ACTIVE') {
+              all = all.filter((b) => b.quantity > 0 && !b.isExpired && b.status === 'ACTIVE');
+            }
+            const q = batchSearch.trim().toLowerCase();
+            if (q) {
+              all = all.filter((b) => b.batchNumber?.toLowerCase().includes(q) || b.productName?.toLowerCase().includes(q));
+            }
+            const PAGE_SIZE = 20;
+            setBatches(all.slice(batchPage * PAGE_SIZE, (batchPage + 1) * PAGE_SIZE));
+            setBatchTotalPages(Math.max(1, Math.ceil(all.length / PAGE_SIZE)));
+            setLoadingBatches(false);
+          });
+        }).catch(() => setLoadingBatches(false));
+      });
 
     batchApi.summary()
       .then((r) => setBatchSummary(r.data?.data || null))

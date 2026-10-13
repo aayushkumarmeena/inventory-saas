@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { productApi } from '../api/productApi';
 import CommandPalette from '../components/CommandPalette';
+import NotificationPopover from '../components/NotificationPopover';
 import { useOfflineStatus } from '../hooks/useOfflineStatus';
 
 const NAV = [
@@ -146,6 +147,7 @@ export default function DashboardLayout() {
   const [gstOpen, setGstOpen] = useState(loc.pathname.startsWith('/gst'));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [lowStockCount, setLowStockCount] = useState(0);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const { isOnline, pendingCount, isSyncing, lastSyncedAt, syncNow } = useOfflineStatus();
 
@@ -398,19 +400,48 @@ export default function DashboardLayout() {
                 )}
               </button>
 
-              {/* Notification bell */}
-              <button
-                className="btn btn-ghost btn-icon"
-                style={{ position: 'relative' }}
-                onClick={() => nav('/inventory')}
-                aria-label="Notifications"
-                title={lowStockCount > 0 ? `${lowStockCount} items running low on stock` : 'No new notifications'}
-              >
-                <i className="ti ti-bell" style={{ fontSize: 16 }} />
-                {lowStockCount > 0 && (
-                  <span className="notification-dot">{lowStockCount}</span>
-                )}
-              </button>
+              {/* Notification bell & popover */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  data-notification-trigger="true"
+                  className="btn btn-ghost btn-icon"
+                  style={{
+                    position: 'relative',
+                    background: notifOpen ? 'var(--surface-3)' : undefined,
+                    color: notifOpen ? 'var(--brand)' : undefined,
+                  }}
+                  onClick={() => setNotifOpen((v) => !v)}
+                  aria-label="Notifications"
+                  title={lowStockCount > 0 ? `${lowStockCount} new alerts` : 'Notifications'}
+                >
+                  <i className={`ti ${notifOpen ? 'ti-bell-ringing' : 'ti-bell'}`} style={{ fontSize: 16 }} />
+                  {lowStockCount > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: 2,
+                        right: 2,
+                        minWidth: 16,
+                        height: 16,
+                        borderRadius: 8,
+                        background: '#ef4444',
+                        color: '#fff',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0 4px',
+                        border: '2px solid var(--surface-1)',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {lowStockCount}
+                    </span>
+                  )}
+                </button>
+                <NotificationPopover isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
+              </div>
 
               <button
                 onClick={toggle}
