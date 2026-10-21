@@ -98,7 +98,21 @@ public class GstService {
         GstConfig cfg = gstConfigRepo.findByTenantId(tenantId)
                 .orElseThrow(() -> new BusinessException("GST configuration not found. Set it up first."));
 
-        String supplyType = resolveSupplyType(cfg.getStateCode(), req.getBuyerStateCode(), req.getSupplyType());
+        String buyerStateCode = sanitizeStateCode(req.getBuyerStateCode(), req.getBuyerGstin());
+        String placeOfSupply = sanitizeStateCode(req.getPlaceOfSupply(), req.getBuyerGstin());
+        if (placeOfSupply == null && buyerStateCode != null) {
+            placeOfSupply = buyerStateCode;
+        } else if (buyerStateCode == null && placeOfSupply != null) {
+            buyerStateCode = placeOfSupply;
+        }
+        if (placeOfSupply == null) {
+            placeOfSupply = cfg.getStateCode() != null ? cfg.getStateCode() : "00";
+        }
+        if (buyerStateCode == null) {
+            buyerStateCode = placeOfSupply;
+        }
+
+        String supplyType = resolveSupplyType(cfg.getStateCode(), buyerStateCode, req.getSupplyType());
         String invType = req.getInvoiceType() != null ? req.getInvoiceType()
                 : (req.getBuyerGstin() != null && !req.getBuyerGstin().isBlank() ? "B2B" : "B2C");
 
@@ -110,7 +124,7 @@ public class GstService {
                 .buyerName(req.getBuyerName())
                 .buyerGstin(req.getBuyerGstin() != null ? req.getBuyerGstin().toUpperCase() : null)
                 .buyerAddress(req.getBuyerAddress()).buyerState(req.getBuyerState())
-                .buyerStateCode(req.getBuyerStateCode()).placeOfSupply(req.getPlaceOfSupply())
+                .buyerStateCode(buyerStateCode).placeOfSupply(placeOfSupply)
                 .reverseCharge(Boolean.TRUE.equals(req.getReverseCharge()))
                 .isCancelled(false).build();
 
@@ -247,6 +261,26 @@ public class GstService {
         int yr = LocalDate.now().getYear()%100;
         long seq = invoiceRepo.findByTenantId(tenantId, PageRequest.of(0,1)).getTotalElements()+1;
         return gstin.substring(0,2)+"/"+yr+"-"+(yr+1)+"/"+String.format("%05d",seq);
+    }
+
+    private String sanitizeStateCode(String input, String gstin) {
+        if (input != null && !input.isBlank()) {
+            String trimmed = input.trim();
+            if (trimmed.length() <= 3) return trimmed;
+            if (Character.isDigit(trimmed.charAt(0))) {
+                StringBuilder sb = new StringBuilder();
+                for (char c : trimmed.toCharArray()) {
+                    if (Character.isDigit(c) && sb.length() < 3) sb.append(c);
+                    else break;
+                }
+                if (sb.length() > 0) return sb.toString();
+            }
+            return trimmed.substring(0, 3);
+        }
+        if (gstin != null && gstin.trim().length() >= 2 && Character.isDigit(gstin.trim().charAt(0))) {
+            return gstin.trim().substring(0, 2);
+        }
+        return null;
     }
 
     private String resolveSupplyType(String sellerCode, String buyerCode, String explicit) {

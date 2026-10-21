@@ -23,9 +23,19 @@ export function runStockWiseEngine(products = [], batches = [], sales = [], supp
   });
 
   // Normalize velocity (assume 14-day tracking window, minimum 0.2 units/day for active inventory)
+  const hasItemDetails = sales.some((s) => s.items && s.items.length > 0);
+  const totalSaleAmount = sales.reduce((sum, s) => sum + Number(s.totalAmount || 0), 0);
+
   const productVelocity = {};
   products.forEach((p) => {
-    const sold = salesVelocityMap[p.id] || 0;
+    let sold = salesVelocityMap[p.id] || 0;
+    if (!hasItemDetails && totalSaleAmount > 0 && products.length > 0) {
+      // Estimate units sold based on store revenue share and product selling price
+      const price = Math.max(10, Number(p.sellingPrice || p.costPrice || 100));
+      const revenueShare = totalSaleAmount / products.length;
+      const estimatedUnits = Math.round(revenueShare / price);
+      sold = Math.max(2, Math.min(100, estimatedUnits));
+    }
     productVelocity[p.id] = Math.max(0.2, Number((sold / 14).toFixed(2)));
   });
 

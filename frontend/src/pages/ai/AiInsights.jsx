@@ -155,6 +155,19 @@ export default function AiInsights() {
         </div>
       )}
 
+      {!loading && products.length === 0 && (
+        <div className="card" style={{ padding: 40, textAlign: 'center', marginBottom: 28 }}>
+          <i className="ti ti-package-off" style={{ fontSize: 44, color: 'var(--brand)', display: 'block', marginBottom: 12 }} />
+          <h3>No products in inventory yet</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14, maxWidth: 500, margin: '8px auto 20px' }}>
+            StockWise AI monitors your catalog, sales velocity, and expiry batches in real time. Add products to activate continuous analysis and automated recommendations.
+          </p>
+          <button className="btn btn-primary" onClick={() => navigate('/products/new')}>
+            <i className="ti ti-plus" /> Add First Product
+          </button>
+        </div>
+      )}
+
       {/* Top Intelligence Metric Cards */}
       <div className="stat-grid" style={{ marginBottom: 28 }}>
         {/* Restock Urgency */}
