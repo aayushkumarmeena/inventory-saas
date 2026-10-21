@@ -6,7 +6,6 @@ import { salesApi } from '../../api/salesApi';
 import { supplierApi } from '../../api/supplierApi';
 import { purchaseApi } from '../../api/purchaseApi';
 import { runStockWiseEngine } from '../../utils/aiEngine';
-import AIAssistantDrawer from '../../components/AIAssistantDrawer';
 import { fmtCurrency } from '../../utils/formatters';
 
 export default function AiInsights() {
@@ -17,7 +16,6 @@ export default function AiInsights() {
   const [sales, setSales] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [activeTab, setActiveTab] = useState('ALL');
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [successBanner, setSuccessBanner] = useState('');
 
   const loadData = async () => {
@@ -124,7 +122,7 @@ export default function AiInsights() {
               border: 'none',
               boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
             }}
-            onClick={() => setIsAssistantOpen(true)}
+            onClick={() => window.dispatchEvent(new CustomEvent('open-ai-copilot'))}
           >
             <i className="ti ti-sparkles" /> Ask AI Copilot
           </button>
@@ -529,14 +527,6 @@ export default function AiInsights() {
           )}
         </div>
       )}
-
-      {/* Embedded AI Assistant Chat Drawer */}
-      <AIAssistantDrawer
-        engineData={engineData}
-        isOpen={isAssistantOpen}
-        onClose={() => setIsAssistantOpen(false)}
-        onOpen={() => setIsAssistantOpen(true)}
-      />
     </div>
   );
 }
