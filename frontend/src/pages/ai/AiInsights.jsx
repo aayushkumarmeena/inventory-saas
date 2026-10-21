@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { productApi } from '../../api/productApi';
 import { batchApi } from '../../api/batchApi';
-import { saleApi } from '../../api/saleApi';
+import { salesApi } from '../../api/salesApi';
 import { supplierApi } from '../../api/supplierApi';
 import { purchaseApi } from '../../api/purchaseApi';
 import { runStockWiseEngine } from '../../utils/aiEngine';
@@ -26,7 +26,7 @@ export default function AiInsights() {
       const [prodRes, batchRes, saleRes, suppRes] = await Promise.allSettled([
         productApi.list({ page: 0, size: 100 }),
         batchApi.list({ page: 0, size: 100 }),
-        saleApi.list({ page: 0, size: 50 }),
+        salesApi.list({ page: 0, size: 50 }),
         supplierApi.list({ page: 0, size: 50 }),
       ]);
 

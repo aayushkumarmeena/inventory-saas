@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { queryStoreAssistant, runStockWiseEngine } from '../utils/aiEngine';
 import { productApi } from '../api/productApi';
 import { batchApi } from '../api/batchApi';
-import { saleApi } from '../api/saleApi';
+import { salesApi } from '../api/salesApi';
 import { supplierApi } from '../api/supplierApi';
 
 export default function AIAssistantDrawer({ engineData: propEngineData, isOpen, onClose, onOpen }) {
@@ -23,7 +23,7 @@ export default function AIAssistantDrawer({ engineData: propEngineData, isOpen, 
       Promise.allSettled([
         productApi.list({ page: 0, size: 100 }),
         batchApi.list({ page: 0, size: 100 }),
-        saleApi.list({ page: 0, size: 50 }),
+        salesApi.list({ page: 0, size: 50 }),
         supplierApi.list({ page: 0, size: 50 }),
       ]).then(([pRes, bRes, sRes, supRes]) => {
         const prods = pRes.status === 'fulfilled' ? pRes.value.data?.data?.content || [] : [];
