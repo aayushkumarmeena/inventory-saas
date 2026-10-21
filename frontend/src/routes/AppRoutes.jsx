@@ -17,6 +17,7 @@ const Suppliers = lazy(() => import('../pages/suppliers/Suppliers'));
 const Team = lazy(() => import('../pages/team/Team'));
 const Activity = lazy(() => import('../pages/activity/Activity'));
 const PrintLabels = lazy(() => import('../pages/labels/PrintLabels'));
+const AiInsights = lazy(() => import('../pages/ai/AiInsights'));
 const GstRoutes = lazy(() => import('./GstRoutes'));
 const NotFound = lazy(() => import('../pages/notfound/NotFound'));
 
@@ -64,6 +65,7 @@ export default function AppRoutes() {
             <Route path="team" element={<Team />} />
             <Route path="activity" element={<Activity />} />
             <Route path="labels" element={<PrintLabels />} />
+            <Route path="ai-insights" element={<AiInsights />} />
             <Route path="gst/*" element={<Priv roles={['ADMIN', 'MANAGER']}><GstRoutes /></Priv>} />
             {/* Unmatched path but logged in: show NotFound inside the dashboard
                 chrome (sidebar/nav) rather than the bare top-level version below. */}

@@ -6,9 +6,11 @@ import { productApi } from '../api/productApi';
 import CommandPalette from '../components/CommandPalette';
 import NotificationPopover from '../components/NotificationPopover';
 import { useOfflineStatus } from '../hooks/useOfflineStatus';
+import AIAssistantDrawer from '../components/AIAssistantDrawer';
 
 const NAV = [
   { path: '/', label: 'Dashboard', icon: 'ti-layout-dashboard', exact: true },
+  { path: '/ai-insights', label: 'AI Intelligence', icon: 'ti-sparkles', badgeText: 'AI' },
   { path: '/products', label: 'Products', icon: 'ti-package' },
   { path: '/sales', label: 'Sales', icon: 'ti-receipt' },
   { path: '/purchases', label: 'Purchases', icon: 'ti-truck-delivery' },
@@ -32,7 +34,7 @@ const GST = [
   { path: '/gst/config', label: 'GST Setup', icon: 'ti-settings-2' },
 ];
 
-function NavItem({ path, label, icon, exact, badgeCount }) {
+function NavItem({ path, label, icon, exact, badgeCount, badgeText }) {
   return (
     <NavLink
       key={path}
@@ -63,6 +65,21 @@ function NavItem({ path, label, icon, exact, badgeCount }) {
             <i className={`ti ${icon}`} style={{ fontSize: 15, flexShrink: 0 }} />
             {label}
           </span>
+          {badgeText && (
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                padding: '2px 6px',
+                borderRadius: 100,
+                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                color: '#fff',
+                boxShadow: '0 2px 8px rgba(99,102,241,0.4)',
+              }}
+            >
+              {badgeText}
+            </span>
+          )}
           {badgeCount > 0 && (
             <span
               style={{
@@ -101,6 +118,7 @@ function Breadcrumbs() {
     labels: 'Print Labels',
     team: 'Team',
     activity: 'Activity',
+    'ai-insights': 'AI Intelligence',
     settings: 'Settings',
     gst: 'GST Module',
     invoices: 'Invoices',
@@ -148,6 +166,7 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const { isOnline, pendingCount, isSyncing, lastSyncedAt, syncNow } = useOfflineStatus();
 
@@ -576,6 +595,7 @@ export default function DashboardLayout() {
       </nav>
 
       <CommandPalette />
+      <AIAssistantDrawer isOpen={aiOpen} onClose={() => setAiOpen(false)} onOpen={() => setAiOpen(true)} />
     </div>
   );
 }
