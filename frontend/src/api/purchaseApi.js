@@ -6,6 +6,7 @@ export const purchaseApi = {
   create: (d) => apiClient.post('/purchases', d),
   cancel: (id) => apiClient.post(`/purchases/${id}/cancel`),
   receive: (id) => apiClient.post(`/purchases/${id}/receive`),
+  autoReorder: () => apiClient.post('/purchases/auto-reorder'),
   export: (params) => apiClient.get('/purchases/export', { params, responseType: 'blob' }),
 };
 

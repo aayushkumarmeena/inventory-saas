@@ -25,6 +25,18 @@ spring:
       timeout: 5000
   cache:
     type: redis
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
 server:
   port: ${SERVER_PORT:8080}
   compression:
@@ -41,6 +53,13 @@ jwt:
 app:
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from-name: ${MAIL_FROM_NAME:InventoryPro}
+    from-address: ${MAIL_FROM_ADDRESS:noreply@inventorypro.com}
+    daily-digest-enabled: ${DIGEST_ENABLED:false}
+    daily-digest-cron: ${DIGEST_CRON:0 0 7 * * *}
+    digest-recipients: ${DIGEST_RECIPIENTS:}
 management:
   endpoints:
     web:

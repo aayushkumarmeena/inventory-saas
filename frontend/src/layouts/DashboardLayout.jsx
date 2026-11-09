@@ -15,6 +15,7 @@ const NAV = [
   { path: '/sales', label: 'Sales', icon: 'ti-receipt' },
   { path: '/pos', label: 'POS Counter', icon: 'ti-device-tablet-dollar', badgeText: 'POS' },
   { path: '/purchases', label: 'Purchases', icon: 'ti-truck-delivery' },
+  { path: '/expenses', label: 'Expenses', icon: 'ti-receipt-2' },
   { path: '/inventory', label: 'Stock', icon: 'ti-arrows-exchange', badgeKey: 'lowStock' },
   { path: '/customers', label: 'Customers', icon: 'ti-users' },
   { path: '/suppliers', label: 'Suppliers', icon: 'ti-building-warehouse' },
@@ -22,6 +23,7 @@ const NAV = [
   { path: '/labels', label: 'Print Labels', icon: 'ti-qrcode' },
   { path: '/team', label: 'Team', icon: 'ti-users-group' },
   { path: '/activity', label: 'Activity', icon: 'ti-history' },
+  { path: '/pricing', label: 'Plans & Pricing', icon: 'ti-crown', badgeText: 'PRO' },
 ];
 
 const GST = [
@@ -122,6 +124,9 @@ function Breadcrumbs() {
     'ai-insights': 'AI Intelligence',
     settings: 'Settings',
     pos: 'POS Counter',
+    expenses: 'Expenses',
+    pricing: 'Plans & Pricing',
+    onboarding: 'Setup Wizard',
     gst: 'GST Module',
     invoices: 'Invoices',
     gstr1: 'GSTR-1',

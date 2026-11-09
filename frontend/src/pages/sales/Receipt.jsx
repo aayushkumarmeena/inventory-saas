@@ -53,6 +53,8 @@ export default function Receipt({ sale, onClose }) {
   const [showCustomize, setShowCustomize] = useState(false);
   const [showWhatsApp, setShowWhatsApp] = useState(false);
   const [whatsAppPhone, setWhatsAppPhone] = useState('');
+  const [showEmail, setShowEmail] = useState(false);
+  const [customerEmail, setCustomerEmail] = useState('');
   const [customerData, setCustomerData] = useState(null);
   const qrCanvasRef = useRef(null);
 
@@ -132,6 +134,9 @@ export default function Receipt({ sale, onClose }) {
           setCustomerData(cust);
           if (cust?.phone) {
             setWhatsAppPhone(cust.phone);
+          }
+          if (cust?.email) {
+            setCustomerEmail(cust.email);
           }
         })
         .catch(() => {});
@@ -785,6 +790,18 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
     setShowWhatsApp(false);
   };
 
+  // Email Bill Sharing Handler
+  const handleSendEmail = (e) => {
+    e?.preventDefault();
+    const itemsSummary = (sale.items || [])
+      .map((it, idx) => `${idx + 1}. ${it.productName} - ${it.quantity} x Rs. ${Number(it.unitPrice).toFixed(2)} = Rs. ${(Number(it.quantity) * Number(it.unitPrice)).toFixed(2)}`)
+      .join('\n');
+    const emailBody = `Tax Invoice / Bill - ${sale.saleNumber}\n\nStore: ${store.name}\nCustomer: ${sale.customerName || 'Customer'}\nDate: ${fmtDate(sale.saleDate)}\n\nItems:\n${itemsSummary}\n\nGrand Total: Rs. ${grandTotal.toFixed(2)}\nAmount Paid: Rs. ${amountPaid.toFixed(2)}\nStatus: ${balanceDue > 0 ? `Balance Due: Rs. ${balanceDue.toFixed(2)}` : 'PAID IN FULL'}\n\nThank you for shopping with us!`;
+    const mailtoUrl = `mailto:${encodeURIComponent(customerEmail || '')}?subject=${encodeURIComponent(`Invoice ${sale.saleNumber} from ${store.name}`)}&body=${encodeURIComponent(emailBody)}`;
+    window.location.href = mailtoUrl;
+    setShowEmail(false);
+  };
+
   return (
     <Modal title={`Invoice & Bill · ${sale.saleNumber}`} onClose={onClose} maxWidth={840}>
       {/* Hidden QR Canvas for Print rendering */}
@@ -827,10 +844,19 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
             type="button"
             className="btn btn-sm"
             style={{ background: '#16a34a', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
-            onClick={() => setShowWhatsApp(true)}
+            onClick={() => { setShowWhatsApp(true); setShowEmail(false); }}
             title="Share bill details on WhatsApp"
           >
             <i className="ti ti-brand-whatsapp" style={{ fontSize: 15 }} /> Share WhatsApp
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: '#2563eb', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+            onClick={() => { setShowEmail(true); setShowWhatsApp(false); }}
+            title="Send invoice via email"
+          >
+            <i className="ti ti-mail" style={{ fontSize: 15 }} /> Send Email
           </button>
           <button
             type="button"
@@ -900,6 +926,44 @@ ${balanceDue > 0 ? `⚠️ *Balance Due:* ₹${balanceDue.toFixed(2)}\n\n📲 *P
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowWhatsApp(false)}>Cancel</button>
               <button type="submit" className="btn btn-sm" style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '6px 16px' }}>
                 <i className="ti ti-send" /> Open WhatsApp
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Email Share Popover Modal */}
+      {showEmail && (
+        <div style={{ background: 'var(--glass-bg)', padding: 16, borderRadius: 10, border: '1px solid #2563eb', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <i className="ti ti-mail" style={{ fontSize: 18 }} />
+              Send Invoice via Email
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowEmail(false)}>
+              <i className="ti ti-x" />
+            </button>
+          </div>
+          <form onSubmit={handleSendEmail}>
+            <div style={{ marginBottom: 12 }}>
+              <label className="field-label" style={{ fontSize: 11 }}>Customer Email Address</label>
+              <input
+                type="email"
+                className="field-input"
+                placeholder="customer@example.com"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                style={{ fontSize: 13 }}
+                autoFocus
+              />
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                A formatted tax invoice summary with items, totals, and receipt details will be delivered.
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowEmail(false)}>Cancel</button>
+              <button type="submit" className="btn btn-sm" style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '6px 16px' }}>
+                <i className="ti ti-send" /> Send Invoice
               </button>
             </div>
           </form>

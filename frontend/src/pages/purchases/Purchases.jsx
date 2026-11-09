@@ -356,7 +356,26 @@ export default function Purchases() {
   const [cancelPurchaseItem, setCancelPurchaseItem] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [autoReordering, setAutoReordering] = useState(false);
   const toast = useToast();
+
+  const handleAutoReorder = async () => {
+    setAutoReordering(true);
+    try {
+      const res = await purchaseApi.autoReorder();
+      const drafts = res.data?.data || [];
+      if (drafts.length === 0) {
+        toast.info('All products are above reorder level! No draft POs needed.');
+      } else {
+        toast.success(`Created ${drafts.length} draft purchase order(s) for low-stock items!`);
+        load();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Auto-reorder failed');
+    } finally {
+      setAutoReordering(false);
+    }
+  };
 
   useEffect(() => {
     if (location.state?.reorderProductId) {
@@ -448,6 +467,10 @@ export default function Purchases() {
           <button className="btn btn-secondary" onClick={exportCsv} disabled={exporting}>
             {exporting && <span className="spinner" />}
             <i className="ti ti-download" /> Export CSV
+          </button>
+          <button className="btn btn-secondary" onClick={handleAutoReorder} disabled={autoReordering} title="Generate draft purchase orders for all items below reorder level">
+            {autoReordering ? <span className="spinner" /> : <i className="ti ti-sparkles" style={{ color: 'var(--brand)' }} />}
+            Auto-Reorder
           </button>
           <button className="btn btn-primary" onClick={() => setShowNew(true)}>
             <i className="ti ti-plus" /> New purchase

@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/purchases")
@@ -61,6 +62,13 @@ public class PurchaseController {
     @PostMapping("/{id}/receive")
     public ResponseEntity<ApiResponse<PurchaseResponse>> receive(@PathVariable Long id) {
         return ok("Purchase received, stock added", purchaseService.receive(tid(), id));
+    }
+
+    @PostMapping("/auto-reorder")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> autoReorder() {
+        List<Map<String, Object>> drafts = purchaseService.createAutoReorderDrafts(tid());
+        String msg = drafts.isEmpty() ? "No products below reorder level" : "Created " + drafts.size() + " draft purchase order(s)";
+        return ResponseEntity.ok(ApiResponse.<List<Map<String, Object>>>builder().success(true).message(msg).data(drafts).build());
     }
 
     @GetMapping("/export")

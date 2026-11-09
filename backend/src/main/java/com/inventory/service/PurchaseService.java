@@ -200,6 +200,48 @@ public class PurchaseService {
         return toResponse(purchase, purchaseItemRepo.findByPurchaseId(purchase.getId()));
     }
 
+    /**
+     * Creates draft purchase orders for all active products whose stock has
+     * fallen to or below their configured reorder level. Each draft PO is
+     * saved with status=DRAFT so the user can review and receive them
+     * individually — no stock is modified here.
+     */
+    @Transactional
+    public List<Map<String, Object>> createAutoReorderDrafts(Long tenantId) {
+        List<Product> lowStockProducts = productRepo.findLowStock(tenantId);
+        if (lowStockProducts.isEmpty()) return List.of();
+
+        List<Map<String, Object>> created = new ArrayList<>();
+        for (Product p : lowStockProducts) {
+            int reorderQty = Math.max(p.getReorderLevel() * 2, 10);
+            BigDecimal unitCost = p.getPrice() != null ? p.getPrice() : BigDecimal.ZERO;
+            BigDecimal total = unitCost.multiply(BigDecimal.valueOf(reorderQty));
+
+            Purchase purchase = Purchase.builder()
+                    .tenantId(tenantId)
+                    .purchaseNumber("AUTO-" + System.currentTimeMillis())
+                    .supplierName("TBD")
+                    .purchaseDate(LocalDate.now())
+                    .totalAmount(total)
+                    .status("DRAFT")
+                    .createdByUserId(audit.userId())
+                    .createdByName(audit.userName())
+                    .build();
+            purchase = purchaseRepo.save(purchase);
+
+            Map<String, Object> info = new java.util.LinkedHashMap<>();
+            info.put("purchaseId", purchase.getId());
+            info.put("purchaseNumber", purchase.getPurchaseNumber());
+            info.put("productId", p.getId());
+            info.put("productName", p.getName());
+            info.put("currentStock", p.getStockQuantity());
+            info.put("reorderLevel", p.getReorderLevel());
+            info.put("suggestedQty", reorderQty);
+            created.add(info);
+        }
+        return created;
+    }
+
     private Purchase find(Long tenantId, Long id) {
         return purchaseRepo.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Purchase not found"));

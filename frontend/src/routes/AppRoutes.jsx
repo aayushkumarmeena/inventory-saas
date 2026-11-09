@@ -19,6 +19,9 @@ const Activity = lazy(() => import('../pages/activity/Activity'));
 const PrintLabels = lazy(() => import('../pages/labels/PrintLabels'));
 const AiInsights = lazy(() => import('../pages/ai/AiInsights'));
 const Pos = lazy(() => import('../pages/pos/Pos'));
+const Expenses = lazy(() => import('../pages/expenses/Expenses'));
+const Pricing = lazy(() => import('../pages/pricing/Pricing'));
+const OnboardingWizard = lazy(() => import('../pages/onboarding/OnboardingWizard'));
 const GstRoutes = lazy(() => import('./GstRoutes'));
 const NotFound = lazy(() => import('../pages/notfound/NotFound'));
 
@@ -53,14 +56,17 @@ export default function AppRoutes() {
         <Routes>
           <Route path="/login" element={<Pub><Login /></Pub>} />
           <Route path="/register" element={<Pub><Register /></Pub>} />
+          <Route path="/onboarding" element={<Priv><OnboardingWizard /></Priv>} />
           <Route path="/" element={<Priv><DashboardLayout /></Priv>}>
             <Route index element={<Dashboard />} />
             <Route path="products" element={<Products />} />
             <Route path="sales" element={<Sales />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="purchases" element={<Purchases />} />
+            <Route path="expenses" element={<Expenses />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="pricing" element={<Pricing />} />
             <Route path="customers" element={<Customers />} />
             <Route path="suppliers" element={<Suppliers />} />
             <Route path="team" element={<Team />} />
